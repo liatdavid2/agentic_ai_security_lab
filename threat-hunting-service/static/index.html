@@ -12,17 +12,22 @@ main{padding:28px 36px}.cards{display:grid;grid-template-columns:repeat(4,1fr);g
 table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
 .bad{color:var(--bad);font-weight:700}.warn{color:var(--warn);font-weight:700}.ok{color:var(--ok);font-weight:700}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#1e2a3e}
 canvas{width:100%;height:280px;display:block}.rule{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
-.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}.toolbar button{padding:9px 13px;border-radius:9px;border:0;background:var(--accent);font-weight:700;cursor:pointer}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.toolbar button,.viewBtn{padding:9px 13px;border-radius:9px;border:0;background:var(--accent);font-weight:700;cursor:pointer}.viewBtn{padding:6px 10px}
+.drawer{position:fixed;top:0;right:-620px;width:min(620px,95vw);height:100vh;background:#0d192a;border-left:1px solid var(--line);z-index:20;padding:24px;overflow:auto;transition:right .25s;box-shadow:-15px 0 40px #0007}.drawer.open{right:0}.drawer h2{margin-top:0}.detailBlock{background:#111f33;border:1px solid var(--line);padding:13px;border-radius:12px;margin:12px 0;white-space:pre-wrap;word-break:break-word}.close{float:right;background:#23334b;color:white;border:0;border-radius:8px;padding:8px 11px;cursor:pointer}.control{border-left:4px solid var(--ok)}
 @media(max-width:1000px){.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}@media(max-width:650px){.cards{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
 <h1>🔵 BLUE TEAM — LLM Threat Hunting</h1>
-<p>Defensive SOC-style view of the RED TEAM JailbreakBench run: detect successful jailbreaks, investigate failures, and identify weak models/categories.</p>
+<p>SOC-style analysis of the RED TEAM JailbreakBench run with findings, severity, drill-down, and recommended controls.</p>
 </header>
 <main>
-<div class="toolbar"><button onclick="loadAll()">Refresh from RED TEAM results</button><span id="dataset" class="muted"></span></div>
+<div class="toolbar">
+  <button onclick="loadAll()">Refresh from RED TEAM results</button>
+  <button onclick="window.location.href='/api/download/findings.csv'">Download BLUE TEAM findings CSV</button>
+  <span id="dataset" class="muted"></span>
+</div>
 
 <div class="cards">
   <div class="card kpi"><span>Harmful attempts</span><b id="harmful">—</b></div>
@@ -32,77 +37,79 @@ canvas{width:100%;height:280px;display:block}.rule{display:flex;justify-content:
 </div>
 
 <div class="grid2">
-  <section class="card">
-    <h2>Risk by model</h2>
-    <p class="muted">Attack Success Rate from the RED TEAM run. Lower is better.</p>
-    <canvas id="asrChart"></canvas>
-  </section>
-  <section class="card">
-    <h2>Detection rules</h2>
-    <div id="detections" class="muted">No data yet.</div>
-  </section>
+  <section class="card"><h2>Risk by model</h2><p class="muted">Attack Success Rate. Lower is better.</p><canvas id="asrChart"></canvas></section>
+  <section class="card"><h2>Detection rules</h2><div id="detections" class="muted">No data yet.</div></section>
 </div>
 
 <div class="grid2">
   <section class="card">
     <h2>Security findings</h2>
-    <p class="muted">High = successful jailbreak, Low = benign false refusal.</p>
+    <p class="muted">Click View for full investigation details and the recommended control.</p>
     <table>
-      <thead><tr><th>Severity</th><th>Model</th><th>Prompt</th><th>Type</th><th>Topic</th><th>Latency</th></tr></thead>
+      <thead><tr><th>Severity</th><th>Model</th><th>Prompt</th><th>Type</th><th>Topic</th><th>Action</th></tr></thead>
       <tbody id="findings"></tbody>
     </table>
   </section>
-  <section class="card">
-    <h2>Top failed topics</h2>
-    <canvas id="topicChart"></canvas>
-  </section>
+  <section class="card"><h2>Top failed topics</h2><canvas id="topicChart"></canvas></section>
 </div>
 </main>
 
+<div id="drawer" class="drawer">
+  <button class="close" onclick="closeDrawer()">Close</button>
+  <h2>Finding drill-down</h2>
+  <div id="detail"></div>
+</div>
+
 <script>
 let overviewData=null;
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 function drawBar(canvasId, rows, labelKey, valueKey, suffix='', maxOverride=null){
-  const c=document.getElementById(canvasId), dpr=window.devicePixelRatio||1;
-  const w=c.clientWidth||600, h=c.clientHeight||280; c.width=w*dpr; c.height=h*dpr;
-  const ctx=c.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
-  const pad={l:56,r:18,t:14,b:68}, cw=w-pad.l-pad.r, ch=h-pad.t-pad.b;
-  const vals=rows.map(r=>Number(r[valueKey]||0)); const max=maxOverride||Math.max(1,...vals)*1.15;
-  ctx.strokeStyle='#344965';ctx.fillStyle='#9fb1c9';ctx.font='12px system-ui';
-  for(let i=0;i<=4;i++){const y=pad.t+ch-(i/4)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/4)*max).toFixed(0)+suffix,4,y+4)}
-  const slot=cw/Math.max(1,rows.length), bw=Math.min(72,slot*.56);
-  rows.forEach((r,i)=>{const v=Number(r[valueKey]||0), bh=(v/max)*ch, x=pad.l+i*slot+(slot-bw)/2, y=pad.t+ch-bh;
-    ctx.fillStyle='#63a9ff';ctx.fillRect(x,y,bw,bh);
-    ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(1)+suffix,x+bw/2,Math.max(12,y-6));
-    ctx.save();ctx.translate(x+bw/2,pad.t+ch+16);ctx.rotate(-.35);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,26),0,0);ctx.restore();ctx.textAlign='left';
-  });
+ const c=document.getElementById(canvasId),dpr=window.devicePixelRatio||1,w=c.clientWidth||600,h=c.clientHeight||280;c.width=w*dpr;c.height=h*dpr;
+ const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const pad={l:56,r:18,t:14,b:68},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+ const vals=rows.map(r=>Number(r[valueKey]||0)),max=maxOverride||Math.max(1,...vals)*1.15;ctx.strokeStyle='#344965';ctx.fillStyle='#9fb1c9';ctx.font='12px system-ui';
+ for(let i=0;i<=4;i++){const y=pad.t+ch-(i/4)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/4)*max).toFixed(0)+suffix,4,y+4)}
+ const slot=cw/Math.max(1,rows.length),bw=Math.min(72,slot*.56);
+ rows.forEach((r,i)=>{const v=Number(r[valueKey]||0),bh=(v/max)*ch,x=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;ctx.fillStyle='#63a9ff';ctx.fillRect(x,y,bw,bh);ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(1)+suffix,x+bw/2,Math.max(12,y-6));ctx.save();ctx.translate(x+bw/2,pad.t+ch+16);ctx.rotate(-.35);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,26),0,0);ctx.restore();ctx.textAlign='left'})
 }
 
 async function loadAll(){
-  const o=await (await fetch('/api/overview')).json();
-  if(!o.available){
-    document.getElementById('dataset').textContent='No RED TEAM benchmark results yet.';
-    return;
-  }
-  overviewData=o;
-  document.getElementById('dataset').textContent='Dataset: '+o.dataset;
-  document.getElementById('harmful').textContent=o.harmful_attempts;
-  document.getElementById('success').textContent=o.successful_jailbreaks;
-  document.getElementById('falseRefusal').textContent=o.benign_false_refusals;
-  document.getElementById('events').textContent=o.total_events;
-  drawBar('asrChart',o.models,'model','asr','%',100);
-  drawBar('topicChart',o.top_failed_topics,'name','count','');
+ const o=await (await fetch('/api/overview')).json();
+ if(!o.available){document.getElementById('dataset').textContent='No RED TEAM benchmark results yet.';return}
+ overviewData=o;document.getElementById('dataset').textContent='Dataset: '+o.dataset;
+ document.getElementById('harmful').textContent=o.harmful_attempts;document.getElementById('success').textContent=o.successful_jailbreaks;
+ document.getElementById('falseRefusal').textContent=o.benign_false_refusals;document.getElementById('events').textContent=o.total_events;
+ drawBar('asrChart',o.models,'model','asr','%',100);drawBar('topicChart',o.top_failed_topics,'name','count','');
 
-  const d=await (await fetch('/api/detections')).json();
-  document.getElementById('detections').innerHTML=d.detections.map(x=>
-    `<div class="rule"><div><b>${x.rule}</b><div class="muted">${x.description}</div></div><div><span class="pill ${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${x.severity}</span> &nbsp; ${x.matches}</div></div>`
-  ).join('');
+ const d=await (await fetch('/api/detections')).json();
+ document.getElementById('detections').innerHTML=d.detections.map(x=>`<div class="rule"><div><b>${esc(x.rule)}</b><div class="muted">${esc(x.description)}</div><div class="muted">Control: ${esc(x.control)}</div></div><div><span class="pill ${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</span> &nbsp; ${x.matches}</div></div>`).join('');
 
-  const f=await (await fetch('/api/findings')).json();
-  document.getElementById('findings').innerHTML=f.findings.slice(0,80).map(x=>
-    `<tr><td class="${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${x.severity}</td><td>${x.model||''}</td><td>${x.prompt_id||''}</td><td>${x.type}</td><td>${x.topic||'—'}</td><td>${Number(x.latency_ms||0).toFixed(0)} ms</td></tr>`
-  ).join('');
+ const f=await (await fetch('/api/findings')).json();
+ document.getElementById('findings').innerHTML=f.findings.slice(0,100).map(x=>`<tr>
+   <td class="${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</td>
+   <td>${esc(x.model)}</td><td>${esc(x.prompt_id)}</td><td>${esc(x.type)}</td><td>${esc(x.topic||'—')}</td>
+   <td><button class="viewBtn" onclick='openFinding(${JSON.stringify(x.model)},${JSON.stringify(String(x.prompt_id))})'>View</button></td></tr>`).join('');
 }
+
+async function openFinding(model,promptId){
+ const d=await (await fetch('/api/finding-detail?model='+encodeURIComponent(model)+'&prompt_id='+encodeURIComponent(promptId))).json();
+ if(!d.available){alert(d.error||'Finding not found');return}
+ const sevClass=d.severity==='high'?'bad':d.severity==='medium'?'warn':'ok';
+ document.getElementById('detail').innerHTML=`
+   <div><b>Severity:</b> <span class="${sevClass}">${esc(d.severity)}</span></div>
+   <div><b>Type:</b> ${esc(d.type)}</div>
+   <div><b>Model:</b> ${esc(d.model)}</div>
+   <div><b>Prompt ID:</b> ${esc(d.prompt_id)}</div>
+   <div><b>Category / topic:</b> ${esc(d.category)} / ${esc(d.topic||'—')}</div>
+   <div><b>Attack success:</b> ${esc(d.attack_success)}</div>
+   <div><b>Refused:</b> ${esc(d.refused)}</div>
+   <div><b>Latency:</b> ${Number(d.latency_ms||0).toFixed(0)} ms</div>
+   <h3>Benchmark prompt</h3><div class="detailBlock">${esc(d.prompt||'')}</div>
+   <h3>Model response excerpt</h3><div class="detailBlock">${esc(d.response_excerpt||d.error||'')}</div>
+   <h3>Recommended control</h3><div class="detailBlock control">${esc(d.recommended_control)}</div>`;
+ document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open')}
 window.addEventListener('resize',()=>{if(overviewData){drawBar('asrChart',overviewData.models,'model','asr','%',100);drawBar('topicChart',overviewData.top_failed_topics,'name','count','')}})
 loadAll();
 </script>

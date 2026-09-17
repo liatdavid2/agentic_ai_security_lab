@@ -2,42 +2,49 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RED TEAM — SLM Jailbreak Robustness Benchmark</title>
+<title>RED TEAM — SLM Jailbreak Robustness</title>
 <style>
-:root{--bg:#0c0f16;--card:#151a23;--line:#2a3241;--text:#f4f7fb;--muted:#98a8c0;--accent:#bf8cff;--ok:#66d69d;--bad:#ff758b}
+:root{--bg:#0c0f16;--card:#151a23;--line:#2a3241;--text:#f4f7fb;--muted:#98a8c0;--accent:#bf8cff;--ok:#66d69d;--warn:#f2c66d;--bad:#ff758b}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:radial-gradient(circle at top right,#251a34,#0c0f16 45%);color:var(--text)}
 header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 7px;font-size:29px}header p,.muted{color:var(--muted)}
-main{padding:28px 36px}.grid{display:grid;grid-template-columns:380px 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
-label{display:block;color:var(--muted);margin:12px 0 6px}input,select,button{width:100%;padding:11px;border-radius:10px;border:1px solid #394356;background:#10151e;color:white}
-button{margin-top:14px;background:var(--accent);color:#1d1026;border:0;font-weight:800;cursor:pointer}
-button.secondary{background:#222938;color:var(--text);border:1px solid #394356}
-button:disabled{opacity:.55;cursor:not-allowed}
-.pill{display:inline-block;padding:7px 10px;border-radius:999px;background:#222938}.ok{color:var(--ok)}.bad{color:var(--bad)}
+main{padding:28px 36px}.grid{display:grid;grid-template-columns:390px 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+label{display:block;color:var(--muted);margin:12px 0 6px}input,button{width:100%;padding:11px;border-radius:10px;border:1px solid #394356;background:#10151e;color:white}
+button{margin-top:12px;background:var(--accent);color:#1d1026;border:0;font-weight:800;cursor:pointer}button.secondary{background:#222938;color:var(--text);border:1px solid #394356}button:disabled{opacity:.55;cursor:not-allowed}
+.pill{display:inline-block;padding:7px 10px;border-radius:999px;background:#222938}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .mode{display:flex;gap:8px}.mode button{margin-top:0}.mode button.active{outline:2px solid var(--accent);background:#2a2037}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.chart{background:#111720;border:1px solid var(--line);border-radius:14px;padding:15px}.chart h3{margin:0 0 5px}
 canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
 .note{padding:13px;border-left:4px solid var(--accent);background:#10151e;color:var(--muted);margin-top:15px}
-.progress-wrap{display:none;margin-top:16px}.progress-line{height:14px;border-radius:999px;background:#252b38;overflow:hidden;border:1px solid #343d4f}.progress-bar{height:100%;width:0;background:linear-gradient(90deg,#a46cf5,#d8b0ff);transition:width .25s ease}.progress-text{margin-top:8px;font-weight:700}.progress-sub{margin-top:4px;color:var(--muted);font-size:13px}
-.downloads{display:flex;gap:10px;margin-top:14px}.downloads button{margin-top:0}
-.help{font-size:12px;color:var(--muted);line-height:1.4;margin-top:5px}
+.progress-wrap{display:none;margin-top:16px}.progress-line{height:14px;border-radius:999px;background:#252b38;overflow:hidden;border:1px solid #343d4f}.progress-bar{height:100%;width:0;background:linear-gradient(90deg,#a46cf5,#d8b0ff);transition:width .25s}.progress-text{margin-top:8px;font-weight:700}.progress-sub,.help{margin-top:5px;color:var(--muted);font-size:12px;line-height:1.4}
+.downloads{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}.downloads button{margin-top:0;width:auto}
+.speed-table td,.speed-table th{text-align:left}
 @media(max-width:1000px){.grid,.charts{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
 <h1>🔴 RED TEAM — SLM Jailbreak Robustness</h1>
-<p>Offensive security testing: compare local SLMs on the official JailbreakBench dataset.</p>
+<p>Ollama Cloud + official JailbreakBench. Run a speed test first, then benchmark the selected models.</p>
 </header>
 <main>
 <div class="grid">
 <section class="card">
-<h2>RED TEAM Benchmark Setup</h2>
+<h2>Benchmark setup</h2>
 <div id="health" class="pill">Checking Ollama…</div>
 <div id="dataset" class="muted" style="margin-top:10px"></div>
 
-<label>Models (comma separated Ollama tags)</label>
+<label>Models</label>
 <input id="models" value="gpt-oss:20b-cloud,gemma4:31b-cloud">
-<div class="help">Free Ollama Cloud set: gpt-oss:20b-cloud, nemotron-3-nano:30b-cloud, gemma4:31b-cloud. Selected from your included free models as the smaller/faster options for benchmarking.</div>
+<div class="help">Current two-model cloud set. No additional model was added.</div>
+
+<button id="speedBtn" class="secondary" onclick="runSpeedTest()">1. Speed test before benchmark</button>
+<div id="speedArea" style="display:none">
+  <table class="speed-table">
+    <thead><tr><th>Model</th><th>Latency</th><th>Status</th></tr></thead>
+    <tbody id="speedRows"></tbody>
+  </table>
+  <div class="downloads"><button class="secondary" onclick="downloadCsv('/api/download/speed.csv')">Download speed CSV</button></div>
+</div>
 
 <label>Benchmark size</label>
 <div class="mode">
@@ -47,18 +54,16 @@ canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:co
 
 <div id="fastOptions">
   <label>Maximum samples per class</label>
-  <input id="maxPerClass" type="number" min="1" value="10000">
-  <div class="help">Fast benchmark: max 10,000 samples per class by default. You can replace 10,000 with any positive number.</div>
+  <input id="maxPerClass" type="number" min="1" value="40">
+  <div class="help">Fast mode uses up to N samples from each class. Change 40 to any positive number.</div>
 </div>
-
-<div id="fullNote" class="help" style="display:none;margin-top:10px">
-  Full benchmark: all rows from every class in the official dataset.
-</div>
+<div id="fullNote" class="help" style="display:none;margin-top:10px">Full benchmark: all rows from every class.</div>
 
 <label>Dataset</label>
 <div class="pill ok">Official JailbreakBench only</div>
 
-<button id="runBtn" onclick="runBenchmark()">Run benchmark</button>
+<button id="runBtn" onclick="runBenchmark()" disabled>2. Run benchmark</button>
+<div class="help">Run benchmark is enabled after a successful speed test.</div>
 
 <div id="progressWrap" class="progress-wrap">
   <div class="progress-line"><div id="progressBar" class="progress-bar"></div></div>
@@ -66,7 +71,7 @@ canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:co
   <div id="progressSub" class="progress-sub"></div>
 </div>
 
-<div class="note"><b>ASR ↓</b> is the main security metric. Lower means fewer harmful benchmark prompts received a non-refusal response.</div>
+<div class="note"><b>ASR ↓</b> = harmful prompts that received a non-refusal. Lower is better. CSV files are persisted automatically after each completed run.</div>
 </section>
 
 <section>
@@ -78,7 +83,7 @@ canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:co
   <button class="secondary" onclick="downloadCsv('/api/download/events.csv')">Download detailed results CSV</button>
 </div>
 <table id="resultsTable" style="display:none">
-<thead><tr><th>Model</th><th>ASR ↓</th><th>Refusal ↑</th><th>Benign pass ↑</th><th>Latency ↓</th><th>Tok/s ↑</th><th>Errors</th></tr></thead>
+<thead><tr><th>Model</th><th>ASR ↓</th><th>Refusal ↑</th><th>Benign pass ↑</th><th>Latency ↓</th><th>Errors</th></tr></thead>
 <tbody></tbody></table>
 </div>
 
@@ -86,7 +91,7 @@ canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:co
 <div class="chart"><h3>Jailbreak Attack Success Rate</h3><p class="muted">Lower is better</p><canvas id="asrChart"></canvas></div>
 <div class="chart"><h3>Benign Pass Rate</h3><p class="muted">Higher is better</p><canvas id="benignChart"></canvas></div>
 <div class="chart"><h3>Average Latency</h3><p class="muted">Milliseconds per response</p><canvas id="latencyChart"></canvas></div>
-<div class="chart"><h3>Generation Throughput</h3><p class="muted">Approx. tokens per second</p><canvas id="tpsChart"></canvas></div>
+<div class="chart"><h3>Refusal Rate</h3><p class="muted">Harmful prompts refused</p><canvas id="refusalChart"></canvas></div>
 </div>
 </section>
 </div>
@@ -96,19 +101,19 @@ canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:co
 let lastResults=[];
 let benchmarkMode='fast';
 let progressTimer=null;
+let speedTestDone=false;
 
 async function init(){
  const h=await (await fetch('/api/health')).json();
  const he=document.getElementById('health');
  he.textContent=h.ollama?'Ollama connected':'Ollama not connected';
  he.className='pill '+(h.ollama?'ok':'bad');
- if(h.installed_models?.length) he.textContent += ' · '+h.installed_models.length+' model(s) installed';
-
  const d=await (await fetch('/api/dataset')).json();
  document.getElementById('dataset').innerHTML=d.ready
    ? `Dataset: <b>${d.name}</b> · ${d.rows} rows (${d.harmful} harmful / ${d.benign} benign)`
-   : `<span class="bad">Official JailbreakBench is not ready yet: ${d.error||'download pending'}</span>`;
-
+   : `<span class="bad">Dataset not ready: ${d.error||''}</span>`;
+ const s=await (await fetch('/api/speed-test/latest')).json();
+ if(s.available && s.results?.length){ renderSpeed(s.results); speedTestDone=true; document.getElementById('runBtn').disabled=false; }
  pollProgress();
 }
 
@@ -120,113 +125,82 @@ function setMode(mode){
  document.getElementById('fullNote').style.display=mode==='full'?'block':'none';
 }
 
+function modelsList(){return document.getElementById('models').value.split(',').map(x=>x.trim()).filter(Boolean)}
+
+function renderSpeed(rows){
+ document.getElementById('speedArea').style.display='block';
+ document.getElementById('speedRows').innerHTML=rows.map(r=>{
+   const cls=r.status==='fast'?'ok':r.status==='moderate'?'warn':'bad';
+   return `<tr><td>${escapeHtml(r.model)}</td><td>${r.latency_ms?Number(r.latency_ms).toFixed(0)+' ms':'—'}</td><td class="${cls}">${escapeHtml(r.status)}</td></tr>`;
+ }).join('');
+}
+
+async function runSpeedTest(){
+ const btn=document.getElementById('speedBtn'); btn.disabled=true; btn.textContent='Speed test running…';
+ try{
+   const r=await fetch('/api/speed-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({models:modelsList()})});
+   const d=await r.json(); if(d.error) throw new Error(d.error);
+   renderSpeed(d.results); speedTestDone=true; document.getElementById('runBtn').disabled=false;
+ }catch(e){alert('Speed test failed: '+e)}
+ finally{btn.disabled=false;btn.textContent='1. Speed test before benchmark'}
+}
+
 function drawBar(canvasId, rows, key, suffix='', maxOverride=null){
  const c=document.getElementById(canvasId), dpr=window.devicePixelRatio||1;
- const w=c.clientWidth, h=c.clientHeight; c.width=w*dpr;c.height=h*dpr;
+ const w=c.clientWidth,h=c.clientHeight;c.width=w*dpr;c.height=h*dpr;
  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
- const pad={l:58,r:18,t:14,b:62}; const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
- const vals=rows.map(r=>Number(r[key]||0)); const max=maxOverride||Math.max(1,...vals)*1.15;
+ const pad={l:58,r:18,t:14,b:62},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+ const vals=rows.map(r=>Number(r[key]||0)),max=maxOverride||Math.max(1,...vals)*1.15;
  ctx.strokeStyle='#354052';ctx.fillStyle='#98a8c0';ctx.font='12px system-ui';
  for(let i=0;i<=4;i++){const y=pad.t+ch-(i/4)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/4)*max).toFixed(0)+suffix,4,y+4)}
- const slot=cw/Math.max(1,rows.length), bw=Math.min(72,slot*.58);
+ const slot=cw/Math.max(1,rows.length),bw=Math.min(72,slot*.58);
  rows.forEach((r,i)=>{const v=Number(r[key]||0),bh=(v/max)*ch,x=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;
-   ctx.fillStyle='#bf8cff';ctx.fillRect(x,y,bw,bh);
-   ctx.fillStyle='#f4f7fb';ctx.textAlign='center';ctx.fillText(v.toFixed(key==='avg_latency_ms'?0:1)+suffix,x+bw/2,Math.max(12,y-6));
+   ctx.fillStyle='#bf8cff';ctx.fillRect(x,y,bw,bh);ctx.fillStyle='#f4f7fb';ctx.textAlign='center';
+   ctx.fillText(v.toFixed(key==='avg_latency_ms'?0:1)+suffix,x+bw/2,Math.max(12,y-6));
    ctx.save();ctx.translate(x+bw/2,pad.t+ch+14);ctx.rotate(-.30);ctx.fillStyle='#aab7cb';ctx.fillText(r.model,0,0);ctx.restore();ctx.textAlign='left';
  });
 }
 
 async function pollProgress(){
  try{
-   const p=await (await fetch('/api/progress')).json();
-   const wrap=document.getElementById('progressWrap');
-   const btn=document.getElementById('runBtn');
-   if(p.running || p.percent>0){
-     wrap.style.display='block';
-     document.getElementById('progressBar').style.width=Math.max(0,Math.min(100,p.percent||0))+'%';
-     document.getElementById('progressText').textContent=p.message||'Benchmark running…';
-     const current = p.current_model
-       ? `Current model: ${p.current_model} · ${p.current_model_sample||0}/${p.current_model_total||0} samples`
-       : `${p.overall_completed_samples||0}/${p.overall_total_samples||0} model-sample evaluations`;
-     document.getElementById('progressSub').textContent=current;
-   }
-   btn.disabled=!!p.running;
+  const p=await (await fetch('/api/progress')).json();
+  if(p.running||p.percent>0){
+   document.getElementById('progressWrap').style.display='block';
+   document.getElementById('progressBar').style.width=Math.max(0,Math.min(100,p.percent||0))+'%';
+   document.getElementById('progressText').textContent=p.message||'Benchmark running…';
+   document.getElementById('progressSub').textContent=p.current_model
+    ? `Current model: ${p.current_model} · ${p.current_model_sample||0}/${p.current_model_total||0} samples`
+    : `${p.overall_completed_samples||0}/${p.overall_total_samples||0} evaluations`;
+  }
  }catch(e){}
 }
 
 async function runBenchmark(){
- const btn=document.getElementById('runBtn');
- const models=document.getElementById('models').value.split(',').map(x=>x.trim()).filter(Boolean);
- const max_per_class=Math.max(1,Number(document.getElementById('maxPerClass').value||10000));
-
- btn.disabled=true;
+ if(!speedTestDone){alert('Run the speed test first.');return;}
+ const btn=document.getElementById('runBtn');btn.disabled=true;
  document.getElementById('progressWrap').style.display='block';
- document.getElementById('progressText').textContent=`Benchmark running… 0/${models.length} models completed`;
- document.getElementById('progressBar').style.width='0%';
-
- if(progressTimer) clearInterval(progressTimer);
- progressTimer=setInterval(pollProgress,700);
-
+ if(progressTimer)clearInterval(progressTimer);progressTimer=setInterval(pollProgress,700);
  try{
-   const r=await fetch('/api/benchmark',{
-     method:'POST',
-     headers:{'Content-Type':'application/json'},
-     body:JSON.stringify({
-       models,
-       benchmark_mode:benchmarkMode,
-       max_per_class,
-       dataset:'official'
-     })
-   });
-   if(!r.ok) throw new Error(await r.text());
-   const d=await r.json();
-   if(d.error) throw new Error(d.error);
-
-   lastResults=d.models;
-   document.getElementById('summary').innerHTML=
-     `Dataset: <b>${d.dataset}</b> · mode: <b>${d.benchmark_mode}</b> · ${d.rows_per_model} prompts/model · ${d.models.length} models`;
-   document.getElementById('downloads').style.display='flex';
-
-   const table=document.getElementById('resultsTable');
-   table.style.display='table';
-   table.querySelector('tbody').innerHTML=d.models.map(m=>`<tr>
-     <td>${m.model}</td>
-     <td>${m.asr.toFixed(1)}%</td>
-     <td>${m.refusal_rate.toFixed(1)}%</td>
-     <td>${m.benign_pass_rate.toFixed(1)}%</td>
-     <td>${m.avg_latency_ms.toFixed(0)} ms</td>
-     <td>${m.tokens_per_sec.toFixed(1)}</td>
-     <td>${m.errors}</td>
-   </tr>`).join('');
-
-   drawBar('asrChart',d.models,'asr','%',100);
-   drawBar('benignChart',d.models,'benign_pass_rate','%',100);
-   drawBar('latencyChart',d.models,'avg_latency_ms','');
-   drawBar('tpsChart',d.models,'tokens_per_sec','');
-
-   await pollProgress();
- }catch(e){
-   document.getElementById('summary').innerHTML='<span class="bad"><b>Benchmark failed:</b> '+String(e)+'</span>';
- }finally{
-   if(progressTimer){clearInterval(progressTimer);progressTimer=null;}
-   btn.disabled=false;
-   await pollProgress();
- }
+  const r=await fetch('/api/benchmark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    models:modelsList(),benchmark_mode:benchmarkMode,
+    max_per_class:Math.max(1,Number(document.getElementById('maxPerClass').value||40)),dataset:'official'
+  })});
+  const d=await r.json(); if(d.error)throw new Error(d.error);
+  lastResults=d.models;
+  document.getElementById('summary').innerHTML=`Dataset: <b>${d.dataset}</b> · ${d.rows_per_model} prompts/model · ${d.models.length} models`;
+  document.getElementById('downloads').style.display='flex';
+  const table=document.getElementById('resultsTable');table.style.display='table';
+  table.querySelector('tbody').innerHTML=d.models.map(m=>`<tr><td>${escapeHtml(m.model)}</td><td>${m.asr.toFixed(1)}%</td><td>${m.refusal_rate.toFixed(1)}%</td><td>${m.benign_pass_rate.toFixed(1)}%</td><td>${m.avg_latency_ms.toFixed(0)} ms</td><td>${m.errors}</td></tr>`).join('');
+  drawBar('asrChart',d.models,'asr','%',100);drawBar('benignChart',d.models,'benign_pass_rate','%',100);
+  drawBar('latencyChart',d.models,'avg_latency_ms','');drawBar('refusalChart',d.models,'refusal_rate','%',100);
+  await pollProgress();
+ }catch(e){document.getElementById('summary').innerHTML='<span class="bad"><b>Benchmark failed:</b> '+escapeHtml(String(e))+'</span>'}
+ finally{if(progressTimer){clearInterval(progressTimer);progressTimer=null}btn.disabled=false}
 }
 
-function downloadCsv(url){
- window.location.href=url;
-}
-
-window.addEventListener('resize',()=>{
- if(lastResults.length){
-   drawBar('asrChart',lastResults,'asr','%',100);
-   drawBar('benignChart',lastResults,'benign_pass_rate','%',100);
-   drawBar('latencyChart',lastResults,'avg_latency_ms','');
-   drawBar('tpsChart',lastResults,'tokens_per_sec','');
- }
-});
-
+function downloadCsv(url){window.location.href=url}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+window.addEventListener('resize',()=>{if(lastResults.length){drawBar('asrChart',lastResults,'asr','%',100);drawBar('benignChart',lastResults,'benign_pass_rate','%',100);drawBar('latencyChart',lastResults,'avg_latency_ms','');drawBar('refusalChart',lastResults,'refusal_rate','%',100)}})
 init();
 </script>
 </body></html>

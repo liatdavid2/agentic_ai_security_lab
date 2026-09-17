@@ -99,14 +99,22 @@ The RED TEAM UI supports:
 Fast-mode sampling is deterministic (seed 42) so runs are comparable.
 
 
-## Default Ollama Cloud benchmark models
+## Latest portfolio features
 
-The RED TEAM UI now defaults to these three cloud models:
+### RED TEAM
+- Defaults to two Ollama Cloud models: `gpt-oss:20b-cloud` and `gemma4:31b-cloud`.
+- Requires a model speed test before the benchmark button is enabled.
+- Speed test shows latency and Fast / Moderate / Slow status.
+- Fast and Full benchmark modes remain available.
+- Benchmark progress bar shows completed models and current sample progress.
+- Results are persisted to CSV:
+  - `/shared/benchmark_summary.csv`
+  - `/shared/benchmark_events.csv`
+  - `/shared/speed_test_results.csv`
 
-- `gpt-oss:20b-cloud`
-- `nemotron-3-nano:30b-cloud`
-- `gemma4:31b-cloud`
-
-These were selected from the user's included Ollama Cloud free-usage model list as the smaller/faster options for repeated JailbreakBench runs. The larger free models (`gpt-oss:120b`, `nemotron-3-super`, `nemotron-3-ultra`) are intentionally not defaults because they are likely to have higher inference cost/latency for this benchmark.
-
-The local Ollama application still exposes the API at `http://localhost:11434`; for `*-cloud` model tags, inference is executed in Ollama Cloud.
+### BLUE TEAM
+- SOC-style findings with High / Medium / Low severity.
+- Clickable drill-down for each finding.
+- Drill-down shows model, prompt ID, topic, benchmark prompt, model response excerpt, outcome, latency, and recommended control.
+- Detection rules include a concrete recommended control.
+- BLUE TEAM findings can be exported to `/shared/blue_team_findings.csv`.
