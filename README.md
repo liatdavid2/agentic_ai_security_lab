@@ -139,3 +139,257 @@ BLUE TEAM analytics are derived only from the already-saved RED TEAM benchmark J
 - Model comparison table with harmful/benign sample counts, latency and recommended control.
 - Filters for model, severity and topic.
 - CSV history panel.
+
+
+## AWS demo deployment with Terraform — create only when needed, destroy after
+
+For a portfolio/demo deployment, the simplest low-cost AWS pattern is an **ephemeral EC2 deployment managed by Terraform**.
+
+### Recommended architecture
+
+```text
+Internet
+   |
+   v
+EC2 (small Linux instance)
+   |
+   +-- Docker Compose
+       +-- RED TEAM UI/API   :8102
+       +-- BLUE TEAM UI/API  :8101
+   |
+   +-- Ollama client/daemon on the EC2 host
+       |
+       +--> Ollama Cloud models
+```
+
+Keep the AWS side intentionally small:
+
+- One EC2 instance only.
+- One small root EBS volume with `delete_on_termination = true`.
+- One security group.
+- No RDS.
+- No NAT Gateway.
+- No Application Load Balancer.
+- No Elastic IP.
+- No Kubernetes/ECS for this demo.
+- Terraform state can stay local for a personal demo.
+
+This keeps both cost and operational complexity low.
+
+### Important: stop is not the same as zero cost
+
+Stopping EC2 stops compute billing, but the EBS disk can still incur storage charges.
+
+For an environment that should cost effectively **nothing while it does not exist**, use:
+
+```bash
+terraform destroy
+```
+
+Terraform will remove the resources it created. Later, recreate the demo with:
+
+```bash
+terraform apply
+```
+
+The local Terraform state stays on the developer machine, so the same infrastructure can be recreated.
+
+### Suggested Terraform lifecycle
+
+From the repository root:
+
+```bash
+cd infra/terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+After `apply`, Terraform should output:
+
+```text
+blue_team_url = http://<PUBLIC_IP>:8101
+red_team_url  = http://<PUBLIC_IP>:8102
+```
+
+Run the demo, then clean up:
+
+```bash
+terraform plan -destroy
+terraform destroy
+```
+
+Use `terraform plan -destroy` first when you want to review exactly what will be deleted.
+
+### EC2 sizing
+
+The EC2 instance does **not** need a GPU because inference is performed by Ollama Cloud.
+
+A small x86 instance such as `t3.small` is a practical starting point for:
+
+- two FastAPI services,
+- static dashboards,
+- Docker Compose,
+- CSV history,
+- outbound calls to Ollama Cloud.
+
+If memory usage is low, the instance type can be reduced later.
+
+### Ollama Cloud on the AWS host
+
+The current application talks to the Ollama API on port `11434`. On the EC2 host:
+
+1. Install Ollama.
+2. Sign in to the Ollama account:
+   ```bash
+   ollama signin
+   ```
+3. Pull only the small cloud manifests:
+   ```bash
+   ollama pull gpt-oss:20b-cloud
+   ollama pull gemma4:31b-cloud
+   ollama pull gpt-oss:120b-cloud
+   ```
+4. Start the Docker Compose application:
+   ```bash
+   docker compose up -d --build
+   ```
+
+The model weights are not stored on EC2 for `*-cloud` models; inference is performed by Ollama Cloud.
+
+For a later fully unattended deployment, replace interactive `ollama signin` with Ollama Cloud API-key authentication and store the key in AWS Secrets Manager or SSM Parameter Store rather than committing it to Git.
+
+### Security-group rule for a demo
+
+For a private demo, restrict inbound access to the developer/recruiter's IP where practical.
+
+Required application ports:
+
+```text
+8101  BLUE TEAM
+8102  RED TEAM
+```
+
+Do not expose port `11434` publicly.
+
+### Cost behavior
+
+While the environment is running, AWS can charge for the EC2 instance, its public IPv4 address, EBS storage, and data transfer according to AWS pricing.
+
+When finished, `terraform destroy` should delete the EC2 instance, its root EBS volume, security group rules created by the stack, and the ephemeral public IPv4 association. This is preferable to simply stopping the instance when the goal is to avoid ongoing infrastructure charges.
+
+Ollama Cloud usage is separate from AWS billing and follows the Ollama account's included usage/credits.
+
+### Before every demo
+
+```bash
+cd infra/terraform
+terraform apply
+```
+
+Then verify:
+
+```text
+BLUE TEAM: http://<PUBLIC_IP>:8101
+RED TEAM:  http://<PUBLIC_IP>:8102
+Swagger:
+http://<PUBLIC_IP>:8101/docs
+http://<PUBLIC_IP>:8102/docs
+```
+
+### After every demo
+
+```bash
+cd infra/terraform
+terraform destroy
+```
+
+Then verify in the AWS console that the Terraform-created EC2 instance and EBS volume are gone.
+
+> Recommendation: for this portfolio project, prefer **apply → demo → destroy** rather than maintaining a permanently running AWS environment.
+
+
+## Terraform files are included
+
+The repository now contains a working starter stack under:
+
+```text
+infra/terraform/
+├─ provider.tf
+├─ variables.tf
+├─ main.tf
+├─ outputs.tf
+├─ user_data.sh.tftpl
+├─ terraform.tfvars.example
+└─ .gitignore
+```
+
+### One-time setup
+
+Copy the example variables file:
+
+**Windows CMD**
+```cmd
+cd infra\terraform
+copy terraform.tfvars.example terraform.tfvars
+```
+
+Edit `terraform.tfvars` and set at least:
+
+```hcl
+repo_url    = "https://github.com/YOUR_GITHUB_USER/agentic_ai_security_lab.git"
+allowed_cidr = "YOUR_PUBLIC_IP/32"
+```
+
+`repo_url` must be reachable from the EC2 instance. The easiest portfolio setup is a public GitHub repository.
+
+### Deploy
+
+```cmd
+cd infra\terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+After apply, Terraform prints:
+
+```text
+blue_team_url
+red_team_url
+blue_team_swagger
+red_team_swagger
+public_ip
+```
+
+The EC2 boot script installs Docker, Docker Compose, Ollama, clones the repository and starts the two Docker services.
+
+### Ollama Cloud sign-in on the AWS host
+
+The application UIs can start automatically, but Ollama Cloud authentication is account-specific.
+
+If you configure an existing EC2 key pair in `terraform.tfvars`:
+
+```hcl
+key_name = "YOUR_EXISTING_EC2_KEYPAIR"
+```
+
+then connect to the host and run:
+
+```bash
+ollama signin
+ollama run gpt-oss:20b-cloud "Say hello"
+```
+
+After that the RED TEAM service can use the host Ollama daemon for cloud inference.
+
+### Destroy after the demo
+
+```cmd
+terraform plan -destroy
+terraform destroy
+```
+
+The stack is intentionally minimal: one EC2 instance, one temporary public IPv4 association, one root EBS volume, and one security group. The root volume has `delete_on_termination = true`.
+
+Always confirm the destroy completed successfully and that no manually created AWS resources remain.

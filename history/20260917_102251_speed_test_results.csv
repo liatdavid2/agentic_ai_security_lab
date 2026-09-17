@@ -1,3 +1,0 @@
-﻿model,latency_ms,status,response_excerpt,error
-gpt-oss:20b-cloud,939.2506660078652,fast,,
-gemma4:31b-cloud,564.2685869970592,fast,OK,

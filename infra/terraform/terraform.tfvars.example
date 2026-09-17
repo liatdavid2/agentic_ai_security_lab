@@ -1,0 +1,12 @@
+aws_region    = "eu-central-1"
+instance_type = "t3.small"
+
+# IMPORTANT: replace with your own public IP /32 for a private demo.
+# Example: "203.0.113.10/32"
+allowed_cidr = "0.0.0.0/0"
+
+repo_url    = "https://github.com/YOUR_GITHUB_USER/agentic_ai_security_lab.git"
+repo_branch = "main"
+
+# Optional. Use an existing EC2 key pair if you want SSH access.
+# key_name = "my-existing-keypair"
