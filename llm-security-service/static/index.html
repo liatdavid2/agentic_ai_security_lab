@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RED TEAM — SLM Jailbreak Robustness Benchmark</title>
+<style>
+:root{--bg:#0c0f16;--card:#151a23;--line:#2a3241;--text:#f4f7fb;--muted:#98a8c0;--accent:#bf8cff;--ok:#66d69d;--bad:#ff758b}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:radial-gradient(circle at top right,#251a34,#0c0f16 45%);color:var(--text)}
+header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 7px;font-size:29px}header p,.muted{color:var(--muted)}
+main{padding:28px 36px}.grid{display:grid;grid-template-columns:360px 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+label{display:block;color:var(--muted);margin:12px 0 6px}input,select,button{width:100%;padding:11px;border-radius:10px;border:1px solid #394356;background:#10151e;color:white}
+button{margin-top:14px;background:var(--accent);color:#1d1026;border:0;font-weight:800;cursor:pointer}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.pill{padding:7px 10px;border-radius:999px;background:#222938}.ok{color:var(--ok)}.bad{color:var(--bad)}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.chart{background:#111720;border:1px solid var(--line);border-radius:14px;padding:15px}.chart h3{margin:0 0 5px}
+canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
+.note{padding:13px;border-left:4px solid var(--accent);background:#10151e;color:var(--muted);margin-top:15px}
+.spinner{display:none;margin-top:10px;color:var(--muted)}
+@media(max-width:1000px){.grid,.charts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>🔴 RED TEAM — SLM Jailbreak Robustness</h1>
+<p>Offensive security testing side: challenge local SLMs with jailbreak prompts and compare how often each model resists or fails.</p>
+</header>
+<main>
+<div class="grid">
+<section class="card">
+<h2>RED TEAM Benchmark Setup</h2>
+<div id="health" class="pill">Checking Ollama…</div>
+<div id="dataset" class="muted"></div>
+<label>Models (comma separated Ollama tags)</label>
+<input id="models" value="qwen3:1.7b,llama3.2:3b,gemma3:1b,phi4-mini">
+<label>Number of prompts</label>
+<input id="limit" type="number" min="1" value="10">
+<label>Dataset</label><div class="pill ok">Official JailbreakBench only</div>
+<button onclick="runBenchmark()">Run benchmark</button>
+<div id="spinner" class="spinner">Benchmark running. Local models can take a few minutes…</div>
+<div class="note"><b>ASR ↓</b> is the main security metric. Lower means fewer harmful benchmark prompts received a non-refusal response. The local judge is heuristic and intentionally transparent.</div>
+</section>
+
+<section>
+<div class="card">
+<h2>Results overview</h2>
+<div id="summary" class="muted">Run a benchmark to populate the charts.</div>
+<table id="resultsTable" style="display:none">
+<thead><tr><th>Model</th><th>ASR ↓</th><th>Refusal ↑</th><th>Benign pass ↑</th><th>Latency ↓</th><th>Tok/s ↑</th><th>Errors</th></tr></thead>
+<tbody></tbody></table>
+</div>
+<div class="charts">
+<div class="chart"><h3>Jailbreak Attack Success Rate</h3><p class="muted">Lower is better</p><canvas id="asrChart"></canvas></div>
+<div class="chart"><h3>Benign Pass Rate</h3><p class="muted">Higher is better</p><canvas id="benignChart"></canvas></div>
+<div class="chart"><h3>Average Latency</h3><p class="muted">Milliseconds per response</p><canvas id="latencyChart"></canvas></div>
+<div class="chart"><h3>Generation Throughput</h3><p class="muted">Approx. tokens per second</p><canvas id="tpsChart"></canvas></div>
+</div>
+</section>
+</div>
+</main>
+
+<script>
+let lastResults=[];
+async function init(){
+ const h=await (await fetch('/api/health')).json();
+ const he=document.getElementById('health');
+ he.textContent=h.ollama?'Ollama connected':'Ollama not connected';
+ he.className='pill '+(h.ollama?'ok':'bad');
+ if(h.installed_models?.length) he.textContent += ' · '+h.installed_models.length+' model(s) installed';
+ const d=await (await fetch('/api/dataset')).json();
+ document.getElementById('dataset').innerHTML=d.ready
+   ? `Dataset: <b>${d.name}</b> · ${d.rows} rows (${d.harmful} harmful / ${d.benign} benign)`
+   : `<span class="bad">Official JailbreakBench is not ready yet: ${d.error||'download pending'}</span>`;
+}
+function drawBar(canvasId, rows, key, suffix='', maxOverride=null){
+ const c=document.getElementById(canvasId), dpr=window.devicePixelRatio||1;
+ const w=c.clientWidth, h=c.clientHeight; c.width=w*dpr;c.height=h*dpr;
+ const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+ const pad={l:58,r:18,t:14,b:62}; const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+ const vals=rows.map(r=>Number(r[key]||0)); const max=maxOverride||Math.max(1,...vals)*1.15;
+ ctx.strokeStyle='#354052';ctx.fillStyle='#98a8c0';ctx.font='12px system-ui';
+ for(let i=0;i<=4;i++){const y=pad.t+ch-(i/4)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/4)*max).toFixed(0)+suffix,4,y+4)}
+ const slot=cw/Math.max(1,rows.length), bw=Math.min(72,slot*.58);
+ rows.forEach((r,i)=>{const v=Number(r[key]||0),bh=(v/max)*ch,x=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;
+   ctx.fillStyle='#bf8cff';ctx.fillRect(x,y,bw,bh);
+   ctx.fillStyle='#f4f7fb';ctx.textAlign='center';ctx.fillText(v.toFixed(key==='avg_latency_ms'?0:1)+suffix,x+bw/2,Math.max(12,y-6));
+   ctx.save();ctx.translate(x+bw/2,pad.t+ch+14);ctx.rotate(-.30);ctx.fillStyle='#aab7cb';ctx.fillText(r.model,0,0);ctx.restore();ctx.textAlign='left';
+ });
+}
+async function runBenchmark(){
+ const btn=document.querySelector('button'), sp=document.getElementById('spinner');btn.disabled=true;sp.style.display='block';
+ const models=document.getElementById('models').value.split(',').map(x=>x.trim()).filter(Boolean);
+ const limit=Number(document.getElementById('limit').value||10);
+ const dataset='official';
+ try{
+   const r=await fetch('/api/benchmark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({models,limit,dataset})});
+   if(!r.ok) throw new Error(await r.text());
+   const d=await r.json(); lastResults=d.models;
+   document.getElementById('summary').innerHTML=`Dataset: <b>${d.dataset}</b> · ${d.rows} prompts · ${d.models.length} models`;
+   const table=document.getElementById('resultsTable');table.style.display='table';
+   table.querySelector('tbody').innerHTML=d.models.map(m=>`<tr><td>${m.model}</td><td>${m.asr.toFixed(1)}%</td><td>${m.refusal_rate.toFixed(1)}%</td><td>${m.benign_pass_rate.toFixed(1)}%</td><td>${m.avg_latency_ms.toFixed(0)} ms</td><td>${m.tokens_per_sec.toFixed(1)}</td><td>${m.errors}</td></tr>`).join('');
+   drawBar('asrChart',d.models,'asr','%',100); drawBar('benignChart',d.models,'benign_pass_rate','%',100);
+   drawBar('latencyChart',d.models,'avg_latency_ms',''); drawBar('tpsChart',d.models,'tokens_per_sec','');
+ }catch(e){document.getElementById('summary').innerHTML='<span class="bad"><b>Benchmark failed:</b> '+String(e)+'</span>'}
+ finally{btn.disabled=false;sp.style.display='none'}
+}
+window.addEventListener('resize',()=>{if(lastResults.length){drawBar('asrChart',lastResults,'asr','%',100);drawBar('benignChart',lastResults,'benign_pass_rate','%',100);drawBar('latencyChart',lastResults,'avg_latency_ms','');drawBar('tpsChart',lastResults,'tokens_per_sec','')}})
+init();
+</script>
+</body></html>

@@ -1,14 +1,28 @@
 services:
   threat-hunting-service:
     build: ./threat-hunting-service
-    container_name: threat-hunting-service
+    container_name: agentic-threat-hunting
     ports:
       - "8101:8101"
     restart: unless-stopped
+    volumes:
+      - benchmark-data:/shared
 
-  llm-hacking-service:
-    build: ./llm-hacking-service
-    container_name: llm-hacking-service
+  llm-security-service:
+    build: ./llm-security-service
+    container_name: llm-security-benchmark
     ports:
       - "8102:8102"
     restart: unless-stopped
+    environment:
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - BENCHMARK_LIMIT=${BENCHMARK_LIMIT:-20}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - benchmark-data:/shared
+      - jailbreakbench-data:/app/data
+
+volumes:
+  benchmark-data:
+  jailbreakbench-data:

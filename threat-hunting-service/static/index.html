@@ -1,98 +1,52 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Threat Hunting on Agents</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLUE TEAM — Threat Hunting on Agents</title>
 <style>
-:root{--bg:#0b1020;--card:#121a2e;--muted:#91a0bd;--text:#f3f6fb;--accent:#6ea8fe;--danger:#ff7a90;--ok:#63d69c}
-*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#0b1020,#10182a);color:var(--text)}
-header{padding:26px 34px;border-bottom:1px solid #25314d;background:#0c1222;position:sticky;top:0}
-header h1{margin:0 0 6px;font-size:28px} header p{margin:0;color:var(--muted)}
-main{padding:28px 34px;display:grid;grid-template-columns:330px 1fr;gap:24px}
-.card{background:var(--card);border:1px solid #25314d;border-radius:16px;padding:18px;box-shadow:0 10px 30px #0002}
-label{display:block;color:var(--muted);margin:12px 0 6px}
-select,button{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #33415f;background:#0d1528;color:var(--text)}
-button{margin-top:14px;background:var(--accent);color:#08101f;border:0;font-weight:700;cursor:pointer}
-.desc{color:var(--muted);line-height:1.5}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-.kpi{background:#0e1628;border:1px solid #25314d;border-radius:12px;padding:14px}.kpi b{display:block;font-size:22px;margin-top:6px}
-table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:11px;border-bottom:1px solid #25314d;text-align:left}th{color:#a9b5ca}
-.risk-high,.risk-suspicious,.risk-secret_access,.risk-new_dependency{color:var(--danger);font-weight:700}.risk-contained{color:var(--ok);font-weight:700}
-.finding{padding:11px 13px;border-radius:10px;background:#171f34;border:1px solid #33415f;margin:8px 0}
-.control{margin-top:14px;padding:14px;border-left:4px solid var(--ok);background:#0f1b28}
-@media(max-width:900px){main{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}}
+:root{--bg:#08111f;--card:#111c2e;--line:#26364f;--text:#f5f8fc;--muted:#9fb0ca;--accent:#62a8ff;--bad:#ff788c;--ok:#61d59a}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#08111f,#0b1526);color:var(--text)}
+header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 6px}header p,.muted{color:var(--muted)}
+main{padding:28px 36px;display:grid;grid-template-columns:1fr 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+select{width:100%;padding:11px;border-radius:10px;background:#0b1423;color:white;border:1px solid #38506f}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+.bad{color:var(--bad);font-weight:700}.ok{color:var(--ok);font-weight:700}.metric{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+@media(max-width:900px){main{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header>
-  <h1>Threat Hunting on Agents</h1>
-  <p>Investigate synthetic agent telemetry, trace an attack chain, and identify the runtime control that would stop it.</p>
-</header>
+<header><h1>🔵 BLUE TEAM — Threat Hunting on Agents</h1><p>Defensive side: inspect agent telemetry, detect suspicious behavior, reconstruct attack chains, and identify controls that stop them.</p></header>
 <main>
-  <section class="card">
-    <h3>Hunt setup</h3>
-    <label>Scenario</label>
-    <select id="scenario"></select>
-    <p id="desc" class="desc"></p>
-    <label>Detection rule</label>
-    <select id="rule">
-      <option value="high_risk">Show high-risk events</option>
-      <option value="secret_then_egress">Secret access → egress</option>
-      <option value="new_dependency">New dependency</option>
-      <option value="prompt_to_tool">Untrusted instruction → tool request</option>
-    </select>
-    <button onclick="runHunt()">Run hunt</button>
-  </section>
-
-  <section>
-    <div class="kpis">
-      <div class="kpi">Events<b id="eventCount">0</b></div>
-      <div class="kpi">Findings<b id="findingCount">0</b></div>
-      <div class="kpi">Scenario<b id="scenarioName" style="font-size:16px">—</b></div>
-    </div>
-    <div class="card">
-      <h3>Findings</h3>
-      <div id="findings" class="desc">Run a hunt to see results.</div>
-      <div id="control" class="control" style="display:none"></div>
-    </div>
-    <div class="card" style="margin-top:16px">
-      <h3>Event timeline</h3>
-      <table>
-        <thead><tr><th>Time</th><th>Agent</th><th>Event</th><th>Resource</th><th>Risk</th></tr></thead>
-        <tbody id="timeline"></tbody>
-      </table>
-    </div>
-  </section>
+<section class="card">
+<h2>BLUE TEAM Hunt Scenario</h2>
+<select id="scenario"></select>
+<p id="desc" class="muted"></p>
+<table><thead><tr><th>Time</th><th>Event</th><th>Resource</th><th>Risk</th></tr></thead><tbody id="events"></tbody></table>
+<p><b>Recommended control:</b> <span id="control"></span></p>
+</section>
+<section class="card">
+<h2>RED TEAM benchmark visibility</h2>
+<div id="bench" class="muted">No benchmark results yet. Run the LLM Security Lab on port 8102.</div>
+</section>
 </main>
 <script>
-let scenarioMeta = [];
-async function init(){
-  scenarioMeta = await (await fetch('/api/scenarios')).json();
-  const sel=document.getElementById('scenario');
-  sel.innerHTML=scenarioMeta.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-  sel.addEventListener('change', updateDescription);
-  updateDescription();
+let scenarios=[];
+async function load(){
+  scenarios=await (await fetch('/api/scenarios')).json();
+  const s=document.getElementById('scenario');
+  s.innerHTML=scenarios.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+  s.onchange=renderScenario; renderScenario();
+  const b=await (await fetch('/api/latest-llm-benchmark')).json();
+  const el=document.getElementById('bench');
+  if(b.available && b.models?.length){
+    el.innerHTML=b.models.map(m=>`<div class="metric"><span>${m.model}</span><span>ASR <b class="${m.asr<=25?'ok':'bad'}">${m.asr.toFixed(1)}%</b> · latency ${m.avg_latency_ms.toFixed(0)} ms</span></div>`).join('');
+  }
 }
-function updateDescription(){
-  const id=document.getElementById('scenario').value;
-  const s=scenarioMeta.find(x=>x.id===id);
-  document.getElementById('desc').textContent=s?.description||'';
+function renderScenario(){
+ const x=scenarios.find(v=>v.id===document.getElementById('scenario').value);
+ if(!x)return; document.getElementById('desc').textContent=x.description;
+ document.getElementById('control').textContent=x.recommended_control;
+ document.getElementById('events').innerHTML=x.events.map(e=>`<tr><td>${e.ts}</td><td>${e.event}</td><td>${e.resource}</td><td class="${['high','suspicious','secret_access'].includes(e.risk)?'bad':e.risk==='contained'?'ok':''}">${e.risk}</td></tr>`).join('');
 }
-async function runHunt(){
-  const scenario_id=document.getElementById('scenario').value;
-  const rule=document.getElementById('rule').value;
-  const r=await fetch('/api/hunt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenario_id,rule})});
-  const data=await r.json();
-  const meta=scenarioMeta.find(x=>x.id===scenario_id);
-  document.getElementById('eventCount').textContent=data.events.length;
-  document.getElementById('findingCount').textContent=data.finding_count;
-  document.getElementById('scenarioName').textContent=meta.name;
-  document.getElementById('findings').innerHTML=data.findings.length?data.findings.map(x=>`<div class="finding">${x}</div>`).join(''):'No findings for this rule.';
-  document.getElementById('control').style.display='block';
-  document.getElementById('control').innerHTML='<b>Recommended runtime control</b><br>'+data.recommended_control;
-  document.getElementById('timeline').innerHTML=data.events.map(e=>`<tr><td>${e.ts}</td><td>${e.agent}</td><td>${e.event}</td><td>${e.resource}</td><td class="risk-${e.risk}">${e.risk}</td></tr>`).join('');
-}
-init();
+load();
 </script>
-</body>
-</html>
+</body></html>
