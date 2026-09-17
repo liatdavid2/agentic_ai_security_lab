@@ -7,20 +7,23 @@
 :root{--bg:#07111f;--card:#101d2f;--line:#263a56;--text:#f4f8fd;--muted:#9fb1c9;--accent:#63a9ff;--ok:#62d59a;--warn:#f4c96b;--bad:#ff788b}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#07111f,#0b1628);color:var(--text)}
 header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 7px}header p,.muted{color:var(--muted)}
-main{padding:28px 36px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+main{padding:28px 36px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
 .kpi span{color:var(--muted)}.kpi b{display:block;font-size:28px;margin-top:7px}.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:18px}
-table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .bad{color:var(--bad);font-weight:700}.warn{color:var(--warn);font-weight:700}.ok{color:var(--ok);font-weight:700}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#1e2a3e}
 canvas{width:100%;height:280px;display:block}.rule{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
 .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.toolbar button,.viewBtn{padding:9px 13px;border-radius:9px;border:0;background:var(--accent);font-weight:700;cursor:pointer}.viewBtn{padding:6px 10px}
-.drawer{position:fixed;top:0;right:-620px;width:min(620px,95vw);height:100vh;background:#0d192a;border-left:1px solid var(--line);z-index:20;padding:24px;overflow:auto;transition:right .25s;box-shadow:-15px 0 40px #0007}.drawer.open{right:0}.drawer h2{margin-top:0}.detailBlock{background:#111f33;border:1px solid var(--line);padding:13px;border-radius:12px;margin:12px 0;white-space:pre-wrap;word-break:break-word}.close{float:right;background:#23334b;color:white;border:0;border-radius:8px;padding:8px 11px;cursor:pointer}.control{border-left:4px solid var(--ok)}
-@media(max-width:1000px){.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}@media(max-width:650px){.cards{grid-template-columns:1fr}}
+.filters{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}select{width:100%;padding:9px;border-radius:9px;border:1px solid #38506f;background:#0b1423;color:white}
+.drawer{position:fixed;top:0;right:-620px;width:min(620px,95vw);height:100vh;background:#0d192a;border-left:1px solid var(--line);z-index:20;padding:24px;overflow:auto;transition:right .25s;box-shadow:-15px 0 40px #0007}.drawer.open{right:0}.drawer h2{margin-top:0}
+.detailBlock{background:#111f33;border:1px solid var(--line);padding:13px;border-radius:12px;margin:12px 0;white-space:pre-wrap;word-break:break-word}.close{float:right;background:#23334b;color:white;border:0;border-radius:8px;padding:8px 11px;cursor:pointer}.control{border-left:4px solid var(--ok)}
+.small{font-size:12px;color:var(--muted)}.history-list{max-height:240px;overflow:auto}.history-item{padding:9px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px}.controlCell{max-width:320px}
+@media(max-width:1100px){.cards{grid-template-columns:1fr 1fr 1fr}.grid2{grid-template-columns:1fr}}@media(max-width:700px){.cards{grid-template-columns:1fr}.filters{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
 <h1>🔵 BLUE TEAM — LLM Threat Hunting</h1>
-<p>SOC-style analysis of the RED TEAM JailbreakBench run with findings, severity, drill-down, and recommended controls.</p>
+<p>SOC-style analysis of the RED TEAM JailbreakBench run. All analytics below are computed from saved benchmark results only — no extra model inference is triggered.</p>
 </header>
 <main>
 <div class="toolbar">
@@ -34,23 +37,54 @@ canvas{width:100%;height:280px;display:block}.rule{display:flex;justify-content:
   <div class="card kpi"><span>Successful jailbreaks</span><b id="success" class="bad">—</b></div>
   <div class="card kpi"><span>Benign false refusals</span><b id="falseRefusal" class="warn">—</b></div>
   <div class="card kpi"><span>Total benchmark events</span><b id="events">—</b></div>
+  <div class="card kpi"><span>Top risky model</span><b id="topRisky" style="font-size:18px">—</b><div id="topRiskyAsr" class="small"></div></div>
 </div>
 
 <div class="grid2">
-  <section class="card"><h2>Risk by model</h2><p class="muted">Attack Success Rate. Lower is better.</p><canvas id="asrChart"></canvas></section>
-  <section class="card"><h2>Detection rules</h2><div id="detections" class="muted">No data yet.</div></section>
+  <section class="card">
+    <h2>Risk by model</h2>
+    <p class="muted">Attack Success Rate with sample size. Lower is better.</p>
+    <canvas id="asrChart"></canvas>
+  </section>
+  <section class="card">
+    <h2>Detection rules</h2>
+    <div id="detections" class="muted">No data yet.</div>
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Model comparison</h2>
+    <table>
+      <thead><tr><th>Model</th><th>ASR</th><th>Harmful N</th><th>Jailbreaks</th><th>Benign pass</th><th>Benign N</th><th>Latency</th><th>Recommended control</th></tr></thead>
+      <tbody id="modelTable"></tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>CSV history</h2>
+    <p class="muted">Timestamped files saved in the repository-level <code>history/</code> folder.</p>
+    <div id="historyList" class="history-list muted">No history yet.</div>
+  </section>
 </div>
 
 <div class="grid2">
   <section class="card">
     <h2>Security findings</h2>
-    <p class="muted">Click View for full investigation details and the recommended control.</p>
+    <p class="muted">Filter existing findings without re-running the benchmark.</p>
+    <div class="filters">
+      <select id="modelFilter" onchange="applyFilters()"><option value="">All models</option></select>
+      <select id="severityFilter" onchange="applyFilters()"><option value="">All severities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+      <select id="topicFilter" onchange="applyFilters()"><option value="">All topics</option></select>
+    </div>
     <table>
       <thead><tr><th>Severity</th><th>Model</th><th>Prompt</th><th>Type</th><th>Topic</th><th>Action</th></tr></thead>
       <tbody id="findings"></tbody>
     </table>
   </section>
-  <section class="card"><h2>Top failed topics</h2><canvas id="topicChart"></canvas></section>
+  <section class="card">
+    <h2>Top failed topics</h2>
+    <canvas id="topicChart"></canvas>
+  </section>
 </div>
 </main>
 
@@ -62,15 +96,47 @@ canvas{width:100%;height:280px;display:block}.rule{display:flex;justify-content:
 
 <script>
 let overviewData=null;
+let allFindings=[];
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 function drawBar(canvasId, rows, labelKey, valueKey, suffix='', maxOverride=null){
  const c=document.getElementById(canvasId),dpr=window.devicePixelRatio||1,w=c.clientWidth||600,h=c.clientHeight||280;c.width=w*dpr;c.height=h*dpr;
- const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const pad={l:56,r:18,t:14,b:68},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+ const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const pad={l:56,r:18,t:14,b:72},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
  const vals=rows.map(r=>Number(r[valueKey]||0)),max=maxOverride||Math.max(1,...vals)*1.15;ctx.strokeStyle='#344965';ctx.fillStyle='#9fb1c9';ctx.font='12px system-ui';
  for(let i=0;i<=4;i++){const y=pad.t+ch-(i/4)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/4)*max).toFixed(0)+suffix,4,y+4)}
- const slot=cw/Math.max(1,rows.length),bw=Math.min(72,slot*.56);
- rows.forEach((r,i)=>{const v=Number(r[valueKey]||0),bh=(v/max)*ch,x=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;ctx.fillStyle='#63a9ff';ctx.fillRect(x,y,bw,bh);ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(1)+suffix,x+bw/2,Math.max(12,y-6));ctx.save();ctx.translate(x+bw/2,pad.t+ch+16);ctx.rotate(-.35);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,26),0,0);ctx.restore();ctx.textAlign='left'})
+ const slot=cw/Math.max(1,rows.length),bw=Math.min(76,slot*.56);
+ rows.forEach((r,i)=>{const v=Number(r[valueKey]||0),bh=(v/max)*ch,x=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;ctx.fillStyle='#63a9ff';ctx.fillRect(x,y,bw,bh);ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(1)+suffix,x+bw/2,Math.max(12,y-6));
+   if(valueKey==='asr' && r.harmful_n!==undefined){ctx.fillStyle='#9fb1c9';ctx.fillText(`(${r.successful_n}/${r.harmful_n})`,x+bw/2,Math.max(26,y+14));}
+   ctx.save();ctx.translate(x+bw/2,pad.t+ch+16);ctx.rotate(-.35);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,28),0,0);ctx.restore();ctx.textAlign='left'})
+}
+
+function renderModelTable(rows){
+ document.getElementById('modelTable').innerHTML=rows.map(m=>`<tr>
+   <td>${esc(m.model)}</td>
+   <td>${Number(m.asr).toFixed(1)}% <span class="small">(${m.successful_n}/${m.harmful_n})</span></td>
+   <td>${m.harmful_n}</td><td>${m.successful_n}</td>
+   <td>${Number(m.benign_pass_rate).toFixed(1)}%</td><td>${m.benign_n}</td>
+   <td>${Number(m.avg_latency_ms).toFixed(0)} ms</td>
+   <td class="controlCell">${esc(m.recommended_control)}</td></tr>`).join('');
+}
+
+function populateFilters(){
+ const models=[...new Set(allFindings.map(x=>x.model).filter(Boolean))].sort();
+ const topics=[...new Set(allFindings.map(x=>x.topic).filter(Boolean))].sort();
+ document.getElementById('modelFilter').innerHTML='<option value="">All models</option>'+models.map(x=>`<option>${esc(x)}</option>`).join('');
+ document.getElementById('topicFilter').innerHTML='<option value="">All topics</option>'+topics.map(x=>`<option>${esc(x)}</option>`).join('');
+}
+
+function applyFilters(){
+ const m=document.getElementById('modelFilter').value,s=document.getElementById('severityFilter').value,t=document.getElementById('topicFilter').value;
+ const rows=allFindings.filter(x=>(!m||x.model===m)&&(!s||x.severity===s)&&(!t||x.topic===t));
+ renderFindings(rows);
+}
+function renderFindings(rows){
+ document.getElementById('findings').innerHTML=rows.slice(0,150).map(x=>`<tr>
+   <td class="${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</td>
+   <td>${esc(x.model)}</td><td>${esc(x.prompt_id)}</td><td>${esc(x.type)}</td><td>${esc(x.topic||'—')}</td>
+   <td><button class="viewBtn" onclick='openFinding(${JSON.stringify(x.model)},${JSON.stringify(String(x.prompt_id))})'>View</button></td></tr>`).join('');
 }
 
 async function loadAll(){
@@ -79,16 +145,19 @@ async function loadAll(){
  overviewData=o;document.getElementById('dataset').textContent='Dataset: '+o.dataset;
  document.getElementById('harmful').textContent=o.harmful_attempts;document.getElementById('success').textContent=o.successful_jailbreaks;
  document.getElementById('falseRefusal').textContent=o.benign_false_refusals;document.getElementById('events').textContent=o.total_events;
+ document.getElementById('topRisky').textContent=o.top_risky_model||'—';
+ document.getElementById('topRiskyAsr').textContent=o.top_risky_model?`ASR ${Number(o.top_risky_asr).toFixed(1)}%`:'';
  drawBar('asrChart',o.models,'model','asr','%',100);drawBar('topicChart',o.top_failed_topics,'name','count','');
+ renderModelTable(o.models);
 
  const d=await (await fetch('/api/detections')).json();
  document.getElementById('detections').innerHTML=d.detections.map(x=>`<div class="rule"><div><b>${esc(x.rule)}</b><div class="muted">${esc(x.description)}</div><div class="muted">Control: ${esc(x.control)}</div></div><div><span class="pill ${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</span> &nbsp; ${x.matches}</div></div>`).join('');
 
  const f=await (await fetch('/api/findings')).json();
- document.getElementById('findings').innerHTML=f.findings.slice(0,100).map(x=>`<tr>
-   <td class="${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</td>
-   <td>${esc(x.model)}</td><td>${esc(x.prompt_id)}</td><td>${esc(x.type)}</td><td>${esc(x.topic||'—')}</td>
-   <td><button class="viewBtn" onclick='openFinding(${JSON.stringify(x.model)},${JSON.stringify(String(x.prompt_id))})'>View</button></td></tr>`).join('');
+ allFindings=f.findings||[];populateFilters();applyFilters();
+
+ const h=await (await fetch('/api/history')).json();
+ document.getElementById('historyList').innerHTML=h.files?.length?h.files.slice(0,30).map(x=>`<div class="history-item"><span>${esc(x.name)}</span><span class="small">${(x.size_bytes/1024).toFixed(1)} KB</span></div>`).join(''):'No history yet.';
 }
 
 async function openFinding(model,promptId){
@@ -97,13 +166,9 @@ async function openFinding(model,promptId){
  const sevClass=d.severity==='high'?'bad':d.severity==='medium'?'warn':'ok';
  document.getElementById('detail').innerHTML=`
    <div><b>Severity:</b> <span class="${sevClass}">${esc(d.severity)}</span></div>
-   <div><b>Type:</b> ${esc(d.type)}</div>
-   <div><b>Model:</b> ${esc(d.model)}</div>
-   <div><b>Prompt ID:</b> ${esc(d.prompt_id)}</div>
+   <div><b>Type:</b> ${esc(d.type)}</div><div><b>Model:</b> ${esc(d.model)}</div><div><b>Prompt ID:</b> ${esc(d.prompt_id)}</div>
    <div><b>Category / topic:</b> ${esc(d.category)} / ${esc(d.topic||'—')}</div>
-   <div><b>Attack success:</b> ${esc(d.attack_success)}</div>
-   <div><b>Refused:</b> ${esc(d.refused)}</div>
-   <div><b>Latency:</b> ${Number(d.latency_ms||0).toFixed(0)} ms</div>
+   <div><b>Attack success:</b> ${esc(d.attack_success)}</div><div><b>Refused:</b> ${esc(d.refused)}</div><div><b>Latency:</b> ${Number(d.latency_ms||0).toFixed(0)} ms</div>
    <h3>Benchmark prompt</h3><div class="detailBlock">${esc(d.prompt||'')}</div>
    <h3>Model response excerpt</h3><div class="detailBlock">${esc(d.response_excerpt||d.error||'')}</div>
    <h3>Recommended control</h3><div class="detailBlock control">${esc(d.recommended_control)}</div>`;

@@ -118,3 +118,24 @@ Fast-mode sampling is deterministic (seed 42) so runs are comparable.
 - Drill-down shows model, prompt ID, topic, benchmark prompt, model response excerpt, outcome, latency, and recommended control.
 - Detection rules include a concrete recommended control.
 - BLUE TEAM findings can be exported to `/shared/blue_team_findings.csv`.
+
+
+## Repository-level CSV history
+
+The project now contains a root-level `history/` directory outside both services.
+
+Docker bind-mounts `./history` to `/history` in both services. After each run the system saves timestamped CSV snapshots there without triggering any additional model inference:
+
+- `YYYYMMDD_HHMMSS_speed_test_results.csv`
+- `YYYYMMDD_HHMMSS_benchmark_summary.csv`
+- `YYYYMMDD_HHMMSS_benchmark_events.csv`
+- `YYYYMMDD_HHMMSS_blue_team_findings.csv` when BLUE TEAM findings are exported.
+
+BLUE TEAM analytics are derived only from the already-saved RED TEAM benchmark JSON/events, so the added dashboard features do not increase LLM runtime.
+
+### BLUE TEAM additions
+- Top risky model KPI.
+- ASR displayed with sample size, e.g. `100% (10/10)`.
+- Model comparison table with harmful/benign sample counts, latency and recommended control.
+- Filters for model, severity and topic.
+- CSV history panel.

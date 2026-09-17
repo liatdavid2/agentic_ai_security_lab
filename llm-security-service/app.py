@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from pathlib import Path
-import requests, os, time, json, re, statistics, csv, random, threading
+import requests, os, time, json, re, statistics, csv, random, threading, shutil
 
 app = FastAPI(title="RED TEAM - LLM Security Lab")
 
@@ -14,6 +14,7 @@ SUMMARY_CSV = Path("/shared/benchmark_summary.csv")
 EVENTS_CSV = Path("/shared/benchmark_events.csv")
 SPEED_JSON = Path("/shared/latest_speed_test.json")
 SPEED_CSV = Path("/shared/speed_test_results.csv")
+HISTORY_DIR = Path("/history")
 
 # Keep the current two cloud models only. No extra model is added.
 DEFAULT_MODELS = ["gpt-oss:20b-cloud", "gemma4:31b-cloud"]
@@ -152,6 +153,18 @@ def write_speed_csv(results):
         for row in results:
             writer.writerow({k: row.get(k, "") for k in fields})
 
+
+def history_stamp():
+    return time.strftime("%Y%m%d_%H%M%S")
+
+def save_history_copy(path: Path, prefix: str, stamp: str):
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        target = HISTORY_DIR / f"{stamp}_{prefix}.csv"
+        shutil.copy2(path, target)
+        return str(target)
+    return None
+
 @app.get("/api/health")
 def health():
     try:
@@ -225,6 +238,8 @@ def speed_test(req: ModelsRequest):
     SPEED_JSON.parent.mkdir(parents=True, exist_ok=True)
     SPEED_JSON.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     write_speed_csv(results)
+    stamp = history_stamp()
+    save_history_copy(SPEED_CSV, "speed_test_results", stamp)
     return payload
 
 @app.get("/api/speed-test/latest")
@@ -397,6 +412,9 @@ def benchmark(req: BenchmarkRequest):
         SHARED.parent.mkdir(parents=True, exist_ok=True)
         SHARED.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         write_benchmark_csvs(payload)
+        stamp = history_stamp()
+        save_history_copy(SUMMARY_CSV, "benchmark_summary", stamp)
+        save_history_copy(EVENTS_CSV, "benchmark_events", stamp)
 
         set_progress(
             running=False,

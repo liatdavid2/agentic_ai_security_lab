@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     volumes:
       - benchmark-data:/shared
+      - ./history:/history
 
   llm-security-service:
     build: ./llm-security-service
@@ -22,6 +23,7 @@ services:
     volumes:
       - benchmark-data:/shared
       - jailbreakbench-data:/app/data
+      - ./history:/history
 
 volumes:
   benchmark-data:
