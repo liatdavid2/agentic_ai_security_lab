@@ -12,8 +12,18 @@ usermod -aG docker ubuntu
 
 # Ollama host daemon
 curl -fsSL https://ollama.com/install.sh | sh
+
+# Allow Docker containers to reach Ollama through the EC2 host.
+# Port 11434 is NOT opened in the AWS security group, so it remains internal.
+mkdir -p /etc/systemd/system/ollama.service.d
+cat >/etc/systemd/system/ollama.service.d/override.conf <<'EOF'
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+EOF
+
+systemctl daemon-reload
 systemctl enable ollama
-systemctl start ollama
+systemctl restart ollama
 
 # Clone/update repository
 install -d -o ubuntu -g ubuntu /opt/agentic_ai_security_lab
@@ -31,6 +41,11 @@ cd /opt/agentic_ai_security_lab
 # Start only the Docker services. The UIs will come up immediately.
 # RED TEAM cloud inference will work after the Ollama account is connected on this host.
 docker compose up -d --build
+
+# Basic bootstrap diagnostics
+systemctl is-active --quiet docker
+systemctl is-active --quiet ollama
+ss -ltn | grep -q ':11434'
 
 cat >/etc/motd <<'EOF'
 agentic_ai_security_lab demo host
