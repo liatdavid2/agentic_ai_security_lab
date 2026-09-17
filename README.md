@@ -82,3 +82,31 @@ The BLUE TEAM now reads the same run and provides:
 
 This keeps the two services on the same experiment:
 `JailbreakBench → SLM responses → RED TEAM results → BLUE TEAM detections and investigation`.
+
+
+## RED TEAM benchmark modes and exports
+
+The RED TEAM UI supports:
+
+- **Fast benchmark** — stratified maximum number of rows **per class**. Default: 10,000 per class, editable in the UI.
+- **Full benchmark** — uses all rows in every class.
+- Live progress: `N/M models completed — currently running <model>` plus an overall progress bar and current sample counter.
+- Automatic CSV persistence after each completed benchmark:
+  - `/shared/benchmark_summary.csv`
+  - `/shared/benchmark_events.csv`
+- Both CSVs can be downloaded directly from the RED TEAM UI.
+
+Fast-mode sampling is deterministic (seed 42) so runs are comparable.
+
+
+## Default Ollama Cloud benchmark models
+
+The RED TEAM UI now defaults to these three cloud models:
+
+- `gpt-oss:20b-cloud`
+- `nemotron-3-nano:30b-cloud`
+- `gemma4:31b-cloud`
+
+These were selected from the user's included Ollama Cloud free-usage model list as the smaller/faster options for repeated JailbreakBench runs. The larger free models (`gpt-oss:120b`, `nemotron-3-super`, `nemotron-3-ultra`) are intentionally not defaults because they are likely to have higher inference cost/latency for this benchmark.
+
+The local Ollama application still exposes the API at `http://localhost:11434`; for `*-cloud` model tags, inference is executed in Ollama Cloud.

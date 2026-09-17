@@ -7,46 +7,81 @@
 :root{--bg:#0c0f16;--card:#151a23;--line:#2a3241;--text:#f4f7fb;--muted:#98a8c0;--accent:#bf8cff;--ok:#66d69d;--bad:#ff758b}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:radial-gradient(circle at top right,#251a34,#0c0f16 45%);color:var(--text)}
 header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 7px;font-size:29px}header p,.muted{color:var(--muted)}
-main{padding:28px 36px}.grid{display:grid;grid-template-columns:360px 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+main{padding:28px 36px}.grid{display:grid;grid-template-columns:380px 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
 label{display:block;color:var(--muted);margin:12px 0 6px}input,select,button{width:100%;padding:11px;border-radius:10px;border:1px solid #394356;background:#10151e;color:white}
 button{margin-top:14px;background:var(--accent);color:#1d1026;border:0;font-weight:800;cursor:pointer}
-.pills{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.pill{padding:7px 10px;border-radius:999px;background:#222938}.ok{color:var(--ok)}.bad{color:var(--bad)}
+button.secondary{background:#222938;color:var(--text);border:1px solid #394356}
+button:disabled{opacity:.55;cursor:not-allowed}
+.pill{display:inline-block;padding:7px 10px;border-radius:999px;background:#222938}.ok{color:var(--ok)}.bad{color:var(--bad)}
+.mode{display:flex;gap:8px}.mode button{margin-top:0}.mode button.active{outline:2px solid var(--accent);background:#2a2037}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.chart{background:#111720;border:1px solid var(--line);border-radius:14px;padding:15px}.chart h3{margin:0 0 5px}
 canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
 .note{padding:13px;border-left:4px solid var(--accent);background:#10151e;color:var(--muted);margin-top:15px}
-.spinner{display:none;margin-top:10px;color:var(--muted)}
+.progress-wrap{display:none;margin-top:16px}.progress-line{height:14px;border-radius:999px;background:#252b38;overflow:hidden;border:1px solid #343d4f}.progress-bar{height:100%;width:0;background:linear-gradient(90deg,#a46cf5,#d8b0ff);transition:width .25s ease}.progress-text{margin-top:8px;font-weight:700}.progress-sub{margin-top:4px;color:var(--muted);font-size:13px}
+.downloads{display:flex;gap:10px;margin-top:14px}.downloads button{margin-top:0}
+.help{font-size:12px;color:var(--muted);line-height:1.4;margin-top:5px}
 @media(max-width:1000px){.grid,.charts{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
 <h1>🔴 RED TEAM — SLM Jailbreak Robustness</h1>
-<p>Offensive security testing side: challenge local SLMs with jailbreak prompts and compare how often each model resists or fails.</p>
+<p>Offensive security testing: compare local SLMs on the official JailbreakBench dataset.</p>
 </header>
 <main>
 <div class="grid">
 <section class="card">
 <h2>RED TEAM Benchmark Setup</h2>
 <div id="health" class="pill">Checking Ollama…</div>
-<div id="dataset" class="muted"></div>
+<div id="dataset" class="muted" style="margin-top:10px"></div>
+
 <label>Models (comma separated Ollama tags)</label>
-<input id="models" value="qwen3:1.7b,llama3.2:3b,gemma3:1b,phi4-mini">
-<label>Number of prompts</label>
-<input id="limit" type="number" min="1" value="10">
-<label>Dataset</label><div class="pill ok">Official JailbreakBench only</div>
-<button onclick="runBenchmark()">Run benchmark</button>
-<div id="spinner" class="spinner">Benchmark running. Local models can take a few minutes…</div>
-<div class="note"><b>ASR ↓</b> is the main security metric. Lower means fewer harmful benchmark prompts received a non-refusal response. The local judge is heuristic and intentionally transparent.</div>
+<input id="models" value="gpt-oss:20b-cloud,gemma4:31b-cloud">
+<div class="help">Free Ollama Cloud set: gpt-oss:20b-cloud, nemotron-3-nano:30b-cloud, gemma4:31b-cloud. Selected from your included free models as the smaller/faster options for benchmarking.</div>
+
+<label>Benchmark size</label>
+<div class="mode">
+  <button id="fastBtn" type="button" class="secondary active" onclick="setMode('fast')">Fast benchmark</button>
+  <button id="fullBtn" type="button" class="secondary" onclick="setMode('full')">Full benchmark</button>
+</div>
+
+<div id="fastOptions">
+  <label>Maximum samples per class</label>
+  <input id="maxPerClass" type="number" min="1" value="10000">
+  <div class="help">Fast benchmark: max 10,000 samples per class by default. You can replace 10,000 with any positive number.</div>
+</div>
+
+<div id="fullNote" class="help" style="display:none;margin-top:10px">
+  Full benchmark: all rows from every class in the official dataset.
+</div>
+
+<label>Dataset</label>
+<div class="pill ok">Official JailbreakBench only</div>
+
+<button id="runBtn" onclick="runBenchmark()">Run benchmark</button>
+
+<div id="progressWrap" class="progress-wrap">
+  <div class="progress-line"><div id="progressBar" class="progress-bar"></div></div>
+  <div id="progressText" class="progress-text">Benchmark running…</div>
+  <div id="progressSub" class="progress-sub"></div>
+</div>
+
+<div class="note"><b>ASR ↓</b> is the main security metric. Lower means fewer harmful benchmark prompts received a non-refusal response.</div>
 </section>
 
 <section>
 <div class="card">
 <h2>Results overview</h2>
 <div id="summary" class="muted">Run a benchmark to populate the charts.</div>
+<div id="downloads" class="downloads" style="display:none">
+  <button class="secondary" onclick="downloadCsv('/api/download/summary.csv')">Download model summary CSV</button>
+  <button class="secondary" onclick="downloadCsv('/api/download/events.csv')">Download detailed results CSV</button>
+</div>
 <table id="resultsTable" style="display:none">
 <thead><tr><th>Model</th><th>ASR ↓</th><th>Refusal ↑</th><th>Benign pass ↑</th><th>Latency ↓</th><th>Tok/s ↑</th><th>Errors</th></tr></thead>
 <tbody></tbody></table>
 </div>
+
 <div class="charts">
 <div class="chart"><h3>Jailbreak Attack Success Rate</h3><p class="muted">Lower is better</p><canvas id="asrChart"></canvas></div>
 <div class="chart"><h3>Benign Pass Rate</h3><p class="muted">Higher is better</p><canvas id="benignChart"></canvas></div>
@@ -59,17 +94,32 @@ canvas{width:100%;height:270px;display:block}table{width:100%;border-collapse:co
 
 <script>
 let lastResults=[];
+let benchmarkMode='fast';
+let progressTimer=null;
+
 async function init(){
  const h=await (await fetch('/api/health')).json();
  const he=document.getElementById('health');
  he.textContent=h.ollama?'Ollama connected':'Ollama not connected';
  he.className='pill '+(h.ollama?'ok':'bad');
  if(h.installed_models?.length) he.textContent += ' · '+h.installed_models.length+' model(s) installed';
+
  const d=await (await fetch('/api/dataset')).json();
  document.getElementById('dataset').innerHTML=d.ready
    ? `Dataset: <b>${d.name}</b> · ${d.rows} rows (${d.harmful} harmful / ${d.benign} benign)`
    : `<span class="bad">Official JailbreakBench is not ready yet: ${d.error||'download pending'}</span>`;
+
+ pollProgress();
 }
+
+function setMode(mode){
+ benchmarkMode=mode;
+ document.getElementById('fastBtn').classList.toggle('active',mode==='fast');
+ document.getElementById('fullBtn').classList.toggle('active',mode==='full');
+ document.getElementById('fastOptions').style.display=mode==='fast'?'block':'none';
+ document.getElementById('fullNote').style.display=mode==='full'?'block':'none';
+}
+
 function drawBar(canvasId, rows, key, suffix='', maxOverride=null){
  const c=document.getElementById(canvasId), dpr=window.devicePixelRatio||1;
  const w=c.clientWidth, h=c.clientHeight; c.width=w*dpr;c.height=h*dpr;
@@ -85,24 +135,98 @@ function drawBar(canvasId, rows, key, suffix='', maxOverride=null){
    ctx.save();ctx.translate(x+bw/2,pad.t+ch+14);ctx.rotate(-.30);ctx.fillStyle='#aab7cb';ctx.fillText(r.model,0,0);ctx.restore();ctx.textAlign='left';
  });
 }
-async function runBenchmark(){
- const btn=document.querySelector('button'), sp=document.getElementById('spinner');btn.disabled=true;sp.style.display='block';
- const models=document.getElementById('models').value.split(',').map(x=>x.trim()).filter(Boolean);
- const limit=Number(document.getElementById('limit').value||10);
- const dataset='official';
+
+async function pollProgress(){
  try{
-   const r=await fetch('/api/benchmark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({models,limit,dataset})});
-   if(!r.ok) throw new Error(await r.text());
-   const d=await r.json(); lastResults=d.models;
-   document.getElementById('summary').innerHTML=`Dataset: <b>${d.dataset}</b> · ${d.rows} prompts · ${d.models.length} models`;
-   const table=document.getElementById('resultsTable');table.style.display='table';
-   table.querySelector('tbody').innerHTML=d.models.map(m=>`<tr><td>${m.model}</td><td>${m.asr.toFixed(1)}%</td><td>${m.refusal_rate.toFixed(1)}%</td><td>${m.benign_pass_rate.toFixed(1)}%</td><td>${m.avg_latency_ms.toFixed(0)} ms</td><td>${m.tokens_per_sec.toFixed(1)}</td><td>${m.errors}</td></tr>`).join('');
-   drawBar('asrChart',d.models,'asr','%',100); drawBar('benignChart',d.models,'benign_pass_rate','%',100);
-   drawBar('latencyChart',d.models,'avg_latency_ms',''); drawBar('tpsChart',d.models,'tokens_per_sec','');
- }catch(e){document.getElementById('summary').innerHTML='<span class="bad"><b>Benchmark failed:</b> '+String(e)+'</span>'}
- finally{btn.disabled=false;sp.style.display='none'}
+   const p=await (await fetch('/api/progress')).json();
+   const wrap=document.getElementById('progressWrap');
+   const btn=document.getElementById('runBtn');
+   if(p.running || p.percent>0){
+     wrap.style.display='block';
+     document.getElementById('progressBar').style.width=Math.max(0,Math.min(100,p.percent||0))+'%';
+     document.getElementById('progressText').textContent=p.message||'Benchmark running…';
+     const current = p.current_model
+       ? `Current model: ${p.current_model} · ${p.current_model_sample||0}/${p.current_model_total||0} samples`
+       : `${p.overall_completed_samples||0}/${p.overall_total_samples||0} model-sample evaluations`;
+     document.getElementById('progressSub').textContent=current;
+   }
+   btn.disabled=!!p.running;
+ }catch(e){}
 }
-window.addEventListener('resize',()=>{if(lastResults.length){drawBar('asrChart',lastResults,'asr','%',100);drawBar('benignChart',lastResults,'benign_pass_rate','%',100);drawBar('latencyChart',lastResults,'avg_latency_ms','');drawBar('tpsChart',lastResults,'tokens_per_sec','')}})
+
+async function runBenchmark(){
+ const btn=document.getElementById('runBtn');
+ const models=document.getElementById('models').value.split(',').map(x=>x.trim()).filter(Boolean);
+ const max_per_class=Math.max(1,Number(document.getElementById('maxPerClass').value||10000));
+
+ btn.disabled=true;
+ document.getElementById('progressWrap').style.display='block';
+ document.getElementById('progressText').textContent=`Benchmark running… 0/${models.length} models completed`;
+ document.getElementById('progressBar').style.width='0%';
+
+ if(progressTimer) clearInterval(progressTimer);
+ progressTimer=setInterval(pollProgress,700);
+
+ try{
+   const r=await fetch('/api/benchmark',{
+     method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({
+       models,
+       benchmark_mode:benchmarkMode,
+       max_per_class,
+       dataset:'official'
+     })
+   });
+   if(!r.ok) throw new Error(await r.text());
+   const d=await r.json();
+   if(d.error) throw new Error(d.error);
+
+   lastResults=d.models;
+   document.getElementById('summary').innerHTML=
+     `Dataset: <b>${d.dataset}</b> · mode: <b>${d.benchmark_mode}</b> · ${d.rows_per_model} prompts/model · ${d.models.length} models`;
+   document.getElementById('downloads').style.display='flex';
+
+   const table=document.getElementById('resultsTable');
+   table.style.display='table';
+   table.querySelector('tbody').innerHTML=d.models.map(m=>`<tr>
+     <td>${m.model}</td>
+     <td>${m.asr.toFixed(1)}%</td>
+     <td>${m.refusal_rate.toFixed(1)}%</td>
+     <td>${m.benign_pass_rate.toFixed(1)}%</td>
+     <td>${m.avg_latency_ms.toFixed(0)} ms</td>
+     <td>${m.tokens_per_sec.toFixed(1)}</td>
+     <td>${m.errors}</td>
+   </tr>`).join('');
+
+   drawBar('asrChart',d.models,'asr','%',100);
+   drawBar('benignChart',d.models,'benign_pass_rate','%',100);
+   drawBar('latencyChart',d.models,'avg_latency_ms','');
+   drawBar('tpsChart',d.models,'tokens_per_sec','');
+
+   await pollProgress();
+ }catch(e){
+   document.getElementById('summary').innerHTML='<span class="bad"><b>Benchmark failed:</b> '+String(e)+'</span>';
+ }finally{
+   if(progressTimer){clearInterval(progressTimer);progressTimer=null;}
+   btn.disabled=false;
+   await pollProgress();
+ }
+}
+
+function downloadCsv(url){
+ window.location.href=url;
+}
+
+window.addEventListener('resize',()=>{
+ if(lastResults.length){
+   drawBar('asrChart',lastResults,'asr','%',100);
+   drawBar('benignChart',lastResults,'benign_pass_rate','%',100);
+   drawBar('latencyChart',lastResults,'avg_latency_ms','');
+   drawBar('tpsChart',lastResults,'tokens_per_sec','');
+ }
+});
+
 init();
 </script>
 </body></html>
