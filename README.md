@@ -66,3 +66,19 @@ The built-in judge is deliberately simple and auditable: it uses response-patter
 ### Why the project does not `pip install jailbreakbench`
 
 The upstream Python package currently pins an old LiteLLM dependency that may fail to resolve in modern Python/container environments. This project only needs the official JBB-Behaviors data, so it downloads the two official CSV splits directly from the JailbreakBench Hugging Face dataset repository instead of installing the full benchmark package.
+
+
+## RED TEAM → BLUE TEAM integration
+
+The RED TEAM stores both aggregate model metrics and one event per JailbreakBench prompt in the shared Docker volume.
+
+The BLUE TEAM now reads the same run and provides:
+- Security overview KPIs.
+- ASR by model.
+- Successful jailbreak findings.
+- Benign false-refusal findings.
+- Detection rules for repeated jailbreak success, high ASR, and over-refusal.
+- Top failed JailbreakBench topics/categories.
+
+This keeps the two services on the same experiment:
+`JailbreakBench → SLM responses → RED TEAM results → BLUE TEAM detections and investigation`.

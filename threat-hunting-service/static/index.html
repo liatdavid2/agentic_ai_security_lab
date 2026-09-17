@@ -2,51 +2,108 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BLUE TEAM — Threat Hunting on Agents</title>
+<title>BLUE TEAM — LLM Threat Hunting</title>
 <style>
-:root{--bg:#08111f;--card:#111c2e;--line:#26364f;--text:#f5f8fc;--muted:#9fb0ca;--accent:#62a8ff;--bad:#ff788c;--ok:#61d59a}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#08111f,#0b1526);color:var(--text)}
-header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 6px}header p,.muted{color:var(--muted)}
-main{padding:28px 36px;display:grid;grid-template-columns:1fr 1fr;gap:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
-select{width:100%;padding:11px;border-radius:10px;background:#0b1423;color:white;border:1px solid #38506f}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
-.bad{color:var(--bad);font-weight:700}.ok{color:var(--ok);font-weight:700}.metric{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
-@media(max-width:900px){main{grid-template-columns:1fr}}
+:root{--bg:#07111f;--card:#101d2f;--line:#263a56;--text:#f4f8fd;--muted:#9fb1c9;--accent:#63a9ff;--ok:#62d59a;--warn:#f4c96b;--bad:#ff788b}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#07111f,#0b1628);color:var(--text)}
+header{padding:28px 36px;border-bottom:1px solid var(--line)}h1{margin:0 0 7px}header p,.muted{color:var(--muted)}
+main{padding:28px 36px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.kpi span{color:var(--muted)}.kpi b{display:block;font-size:28px;margin-top:7px}.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:18px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+.bad{color:var(--bad);font-weight:700}.warn{color:var(--warn);font-weight:700}.ok{color:var(--ok);font-weight:700}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#1e2a3e}
+canvas{width:100%;height:280px;display:block}.rule{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}.toolbar button{padding:9px 13px;border-radius:9px;border:0;background:var(--accent);font-weight:700;cursor:pointer}
+@media(max-width:1000px){.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}@media(max-width:650px){.cards{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><h1>🔵 BLUE TEAM — Threat Hunting on Agents</h1><p>Defensive side: inspect agent telemetry, detect suspicious behavior, reconstruct attack chains, and identify controls that stop them.</p></header>
+<header>
+<h1>🔵 BLUE TEAM — LLM Threat Hunting</h1>
+<p>Defensive SOC-style view of the RED TEAM JailbreakBench run: detect successful jailbreaks, investigate failures, and identify weak models/categories.</p>
+</header>
 <main>
-<section class="card">
-<h2>BLUE TEAM Hunt Scenario</h2>
-<select id="scenario"></select>
-<p id="desc" class="muted"></p>
-<table><thead><tr><th>Time</th><th>Event</th><th>Resource</th><th>Risk</th></tr></thead><tbody id="events"></tbody></table>
-<p><b>Recommended control:</b> <span id="control"></span></p>
-</section>
-<section class="card">
-<h2>RED TEAM benchmark visibility</h2>
-<div id="bench" class="muted">No benchmark results yet. Run the LLM Security Lab on port 8102.</div>
-</section>
+<div class="toolbar"><button onclick="loadAll()">Refresh from RED TEAM results</button><span id="dataset" class="muted"></span></div>
+
+<div class="cards">
+  <div class="card kpi"><span>Harmful attempts</span><b id="harmful">—</b></div>
+  <div class="card kpi"><span>Successful jailbreaks</span><b id="success" class="bad">—</b></div>
+  <div class="card kpi"><span>Benign false refusals</span><b id="falseRefusal" class="warn">—</b></div>
+  <div class="card kpi"><span>Total benchmark events</span><b id="events">—</b></div>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Risk by model</h2>
+    <p class="muted">Attack Success Rate from the RED TEAM run. Lower is better.</p>
+    <canvas id="asrChart"></canvas>
+  </section>
+  <section class="card">
+    <h2>Detection rules</h2>
+    <div id="detections" class="muted">No data yet.</div>
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Security findings</h2>
+    <p class="muted">High = successful jailbreak, Low = benign false refusal.</p>
+    <table>
+      <thead><tr><th>Severity</th><th>Model</th><th>Prompt</th><th>Type</th><th>Topic</th><th>Latency</th></tr></thead>
+      <tbody id="findings"></tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Top failed topics</h2>
+    <canvas id="topicChart"></canvas>
+  </section>
+</div>
 </main>
+
 <script>
-let scenarios=[];
-async function load(){
-  scenarios=await (await fetch('/api/scenarios')).json();
-  const s=document.getElementById('scenario');
-  s.innerHTML=scenarios.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  s.onchange=renderScenario; renderScenario();
-  const b=await (await fetch('/api/latest-llm-benchmark')).json();
-  const el=document.getElementById('bench');
-  if(b.available && b.models?.length){
-    el.innerHTML=b.models.map(m=>`<div class="metric"><span>${m.model}</span><span>ASR <b class="${m.asr<=25?'ok':'bad'}">${m.asr.toFixed(1)}%</b> · latency ${m.avg_latency_ms.toFixed(0)} ms</span></div>`).join('');
+let overviewData=null;
+
+function drawBar(canvasId, rows, labelKey, valueKey, suffix='', maxOverride=null){
+  const c=document.getElementById(canvasId), dpr=window.devicePixelRatio||1;
+  const w=c.clientWidth||600, h=c.clientHeight||280; c.width=w*dpr; c.height=h*dpr;
+  const ctx=c.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
+  const pad={l:56,r:18,t:14,b:68}, cw=w-pad.l-pad.r, ch=h-pad.t-pad.b;
+  const vals=rows.map(r=>Number(r[valueKey]||0)); const max=maxOverride||Math.max(1,...vals)*1.15;
+  ctx.strokeStyle='#344965';ctx.fillStyle='#9fb1c9';ctx.font='12px system-ui';
+  for(let i=0;i<=4;i++){const y=pad.t+ch-(i/4)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/4)*max).toFixed(0)+suffix,4,y+4)}
+  const slot=cw/Math.max(1,rows.length), bw=Math.min(72,slot*.56);
+  rows.forEach((r,i)=>{const v=Number(r[valueKey]||0), bh=(v/max)*ch, x=pad.l+i*slot+(slot-bw)/2, y=pad.t+ch-bh;
+    ctx.fillStyle='#63a9ff';ctx.fillRect(x,y,bw,bh);
+    ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(1)+suffix,x+bw/2,Math.max(12,y-6));
+    ctx.save();ctx.translate(x+bw/2,pad.t+ch+16);ctx.rotate(-.35);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,26),0,0);ctx.restore();ctx.textAlign='left';
+  });
+}
+
+async function loadAll(){
+  const o=await (await fetch('/api/overview')).json();
+  if(!o.available){
+    document.getElementById('dataset').textContent='No RED TEAM benchmark results yet.';
+    return;
   }
+  overviewData=o;
+  document.getElementById('dataset').textContent='Dataset: '+o.dataset;
+  document.getElementById('harmful').textContent=o.harmful_attempts;
+  document.getElementById('success').textContent=o.successful_jailbreaks;
+  document.getElementById('falseRefusal').textContent=o.benign_false_refusals;
+  document.getElementById('events').textContent=o.total_events;
+  drawBar('asrChart',o.models,'model','asr','%',100);
+  drawBar('topicChart',o.top_failed_topics,'name','count','');
+
+  const d=await (await fetch('/api/detections')).json();
+  document.getElementById('detections').innerHTML=d.detections.map(x=>
+    `<div class="rule"><div><b>${x.rule}</b><div class="muted">${x.description}</div></div><div><span class="pill ${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${x.severity}</span> &nbsp; ${x.matches}</div></div>`
+  ).join('');
+
+  const f=await (await fetch('/api/findings')).json();
+  document.getElementById('findings').innerHTML=f.findings.slice(0,80).map(x=>
+    `<tr><td class="${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${x.severity}</td><td>${x.model||''}</td><td>${x.prompt_id||''}</td><td>${x.type}</td><td>${x.topic||'—'}</td><td>${Number(x.latency_ms||0).toFixed(0)} ms</td></tr>`
+  ).join('');
 }
-function renderScenario(){
- const x=scenarios.find(v=>v.id===document.getElementById('scenario').value);
- if(!x)return; document.getElementById('desc').textContent=x.description;
- document.getElementById('control').textContent=x.recommended_control;
- document.getElementById('events').innerHTML=x.events.map(e=>`<tr><td>${e.ts}</td><td>${e.event}</td><td>${e.resource}</td><td class="${['high','suspicious','secret_access'].includes(e.risk)?'bad':e.risk==='contained'?'ok':''}">${e.risk}</td></tr>`).join('');
-}
-load();
+window.addEventListener('resize',()=>{if(overviewData){drawBar('asrChart',overviewData.models,'model','asr','%',100);drawBar('topicChart',overviewData.top_failed_topics,'name','count','')}})
+loadAll();
 </script>
 </body></html>

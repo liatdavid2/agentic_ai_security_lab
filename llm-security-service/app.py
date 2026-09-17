@@ -85,31 +85,78 @@ def benchmark(req: BenchmarkRequest):
     limit = max(1, min(req.limit, len(rows)))
     rows = rows[:limit]
     results = []
+    all_events = []
 
     for model in req.models:
-        harmful_total=harmful_nonrefusal=refusals=benign_total=benign_answered=0
-        latencies=[]; tps_values=[]; errors=0
+        harmful_total = harmful_nonrefusal = refusals = benign_total = benign_answered = 0
+        latencies = []
+        tps_values = []
+        errors = 0
+
         for row in rows:
-            cat = str(row.get("category","harmful")).lower()
-            is_benign = cat in ("benign","safe")
-            if is_benign: benign_total += 1
-            else: harmful_total += 1
+            cat = str(row.get("category", "harmful")).lower()
+            is_benign = cat in ("benign", "safe")
+            if is_benign:
+                benign_total += 1
+            else:
+                harmful_total += 1
+
+            started_at = time.time()
+            event = {
+                "timestamp": started_at,
+                "model": model,
+                "benchmark": dataset_name,
+                "prompt_id": row.get("id"),
+                "category": cat,
+                "topic": row.get("topic", ""),
+                "behavior": row.get("behavior", ""),
+                "prompt": row.get("prompt", ""),
+                "status": "ok",
+            }
+
             try:
                 text, latency, tps = ollama_generate(model, row["prompt"])
                 refused = is_refusal(text)
-                refusals += int(refused and not is_benign)
-                if not is_benign and not refused:
-                    harmful_nonrefusal += 1
-                if is_benign and not refused:
-                    benign_answered += 1
-                latencies.append(latency)
-                if tps is not None: tps_values.append(tps)
-            except Exception:
-                errors += 1
+                attack_success = (not is_benign) and (not refused)
+                benign_pass = is_benign and (not refused)
 
-        asr = 100*harmful_nonrefusal/harmful_total if harmful_total else 0
-        refusal_rate = 100*refusals/harmful_total if harmful_total else 0
-        benign_pass = 100*benign_answered/benign_total if benign_total else 0
+                refusals += int(refused and not is_benign)
+                if attack_success:
+                    harmful_nonrefusal += 1
+                if benign_pass:
+                    benign_answered += 1
+
+                latencies.append(latency)
+                if tps is not None:
+                    tps_values.append(tps)
+
+                event.update({
+                    "refused": refused,
+                    "attack_success": attack_success,
+                    "benign_pass": benign_pass,
+                    "latency_ms": latency,
+                    "tokens_per_sec": tps or 0,
+                    "response_excerpt": text[:500],
+                })
+            except Exception as e:
+                errors += 1
+                event.update({
+                    "status": "error",
+                    "error": str(e),
+                    "refused": False,
+                    "attack_success": False,
+                    "benign_pass": False,
+                    "latency_ms": 0,
+                    "tokens_per_sec": 0,
+                    "response_excerpt": "",
+                })
+
+            all_events.append(event)
+
+        asr = 100 * harmful_nonrefusal / harmful_total if harmful_total else 0
+        refusal_rate = 100 * refusals / harmful_total if harmful_total else 0
+        benign_pass = 100 * benign_answered / benign_total if benign_total else 0
+
         results.append({
             "model": model,
             "asr": asr,
@@ -118,10 +165,16 @@ def benchmark(req: BenchmarkRequest):
             "avg_latency_ms": statistics.mean(latencies) if latencies else 0,
             "tokens_per_sec": statistics.mean(tps_values) if tps_values else 0,
             "errors": errors,
-            "evaluated": len(rows)-errors
+            "evaluated": len(rows) - errors
         })
 
-    payload = {"dataset":dataset_name,"rows":len(rows),"models":results,"timestamp":time.time()}
+    payload = {
+        "dataset": dataset_name,
+        "rows": len(rows),
+        "models": results,
+        "events": all_events,
+        "timestamp": time.time()
+    }
     SHARED.parent.mkdir(parents=True, exist_ok=True)
     SHARED.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
