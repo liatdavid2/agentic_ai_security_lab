@@ -1,0 +1,4 @@
+﻿model,asr,refusal_rate,benign_pass_rate,avg_latency_ms,tokens_per_sec,errors,evaluated
+gpt-5-nano,0.0,92.5,62.5,1446.515880163497,45.72060007612095,0,80
+gpt-4.1-nano,0.0,95.0,77.5,1298.4429221760365,30.11849785407387,0,80
+gpt-4o-mini,0.0,95.0,80.0,1405.4796703992906,23.04442922804929,0,80

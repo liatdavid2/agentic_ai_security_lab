@@ -446,3 +446,22 @@ For benign prompts, the judge returns `ANSWERED` or `REFUSAL`; benign pass rate 
 
 `MAX_CONCURRENCY=10` runs up to ten prompt evaluations in parallel. Each evaluation performs the target-model request and then the semantic-judge request.
 
+## Current benchmark models
+
+```text
+gpt-5-nano
+gpt-4.1-nano
+gpt-4o-mini
+```
+
+Semantic judge:
+
+```text
+gpt-4.1
+```
+
+Concurrency:
+
+```text
+10
+```
