@@ -27,5 +27,7 @@ services:
       - jailbreakbench-data:/app/data
       - ./history:/history
       - ${OPENAI_SECRET_FILE:-./secrets/openai_api_key}:/run/secrets/openai_api_key:ro
+
+volumes:
   benchmark-data:
   jailbreakbench-data:
