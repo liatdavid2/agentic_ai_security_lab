@@ -15,6 +15,7 @@ Two-service Docker Compose lab:
 
 1. **BLUE TEAM — Threat Hunting on Agents** 
 <img width="1917" height="962" alt="image" src="https://github.com/user-attachments/assets/be92f08e-8660-4167-bd26-e9d71d27d4fc" />
+
 3. **RED TEAM — LLM Security Lab / Jailbreak Robustness Benchmark**
 <img width="1917" height="855" alt="image" src="https://github.com/user-attachments/assets/d630a56a-093d-4f63-9940-fe2e8f325067" />
 
