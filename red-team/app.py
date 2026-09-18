@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from pathlib import Path
 import requests, os, time, json, re, statistics, csv, random, threading, shutil
 
-app = FastAPI(title="RED TEAM - LLM Security Lab")
+app = FastAPI(title="RED TEAM - Security Benchmark")
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/")
 DATA_DIR = Path("/app/data")
