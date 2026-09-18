@@ -1,3 +1,14 @@
+## OpenAI API configuration
+
+Create/update `.env` in the repository root:
+
+```env
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+OPENAI_API_URL=https://api.openai.com/v1
+```
+
+The benchmark uses `gpt-5-mini`, `gpt-4.1-mini`, and `gpt-4.1-nano`.
+
 # agentic_ai_security_lab
 
 Two-service Docker Compose lab:
@@ -5,12 +16,12 @@ Two-service Docker Compose lab:
 1. **BLUE TEAM — Threat Hunting on Agents** — port `8101`
 2. **RED TEAM — LLM Security Lab / Jailbreak Robustness Benchmark** — port `8102`
 
-The LLM Security Lab now benchmarks **real local SLMs through Ollama**.  
-Ollama is intentionally **not** a third Compose service, so the project stays at two services.
+The LLM Security Lab now benchmarks **real local SLMs through OpenAI API**.  
+OpenAI API is intentionally **not** a third Compose service, so the project stays at two services.
 
-## 1. Install Ollama on the host
+## 1. Install OpenAI API on the host
 
-Install Ollama, then pull any models you want to compare. Suggested small models:
+Install OpenAI API, then pull any models you want to compare. Suggested small models:
 
 ```bash
 ollama pull qwen3:1.7b
@@ -19,7 +30,7 @@ ollama pull gemma3:1b
 ollama pull phi4-mini
 ```
 
-You can benchmark any Ollama model tag, not only these defaults.
+You can benchmark any OpenAI API model tag, not only these defaults.
 
 ## 2. Start the lab
 
@@ -53,7 +64,7 @@ The normalized dataset is stored at:
 - **Refusal Rate** — fraction of harmful prompts refused.
 - **Benign Pass Rate** — fraction of benign prompts answered rather than unnecessarily refused.
 - **Average Latency** — average wall-clock response time.
-- **Throughput** — approximate generated tokens per second when Ollama reports token counts.
+- **Throughput** — approximate generated tokens per second when OpenAI API reports token counts.
 
 ## Benchmark design
 
@@ -102,7 +113,7 @@ Fast-mode sampling is deterministic (seed 42) so runs are comparable.
 ## Latest portfolio features
 
 ### RED TEAM
-- Defaults to two Ollama Cloud models: `gpt-oss:20b-cloud` and `gemma4:31b-cloud`.
+- Defaults to two OpenAI API models: `gpt-oss:20b-cloud` and `gemma4:31b-cloud`.
 - Requires a model speed test before the benchmark button is enabled.
 - Speed test shows latency and Fast / Moderate / Slow status.
 - Fast and Full benchmark modes remain available.
@@ -157,9 +168,9 @@ EC2 (small Linux instance)
        +-- RED TEAM UI/API   :8102
        +-- BLUE TEAM UI/API  :8101
    |
-   +-- Ollama client/daemon on the EC2 host
+   +-- OpenAI API client/daemon on the EC2 host
        |
-       +--> Ollama Cloud models
+       +--> OpenAI API models
 ```
 
 Keep the AWS side intentionally small:
@@ -223,7 +234,7 @@ Use `terraform plan -destroy` first when you want to review exactly what will be
 
 ### EC2 sizing
 
-The EC2 instance does **not** need a GPU because inference is performed by Ollama Cloud.
+The EC2 instance does **not** need a GPU because inference is performed by OpenAI API.
 
 A small x86 instance such as `t3.small` is a practical starting point for:
 
@@ -231,16 +242,16 @@ A small x86 instance such as `t3.small` is a practical starting point for:
 - static dashboards,
 - Docker Compose,
 - CSV history,
-- outbound calls to Ollama Cloud.
+- outbound calls to OpenAI API.
 
 If memory usage is low, the instance type can be reduced later.
 
-### Ollama Cloud on the AWS host
+### OpenAI API on the AWS host
 
-The current application talks to the Ollama API on port `11434`. On the EC2 host:
+The current application talks to the OpenAI API API on port `11434`. On the EC2 host:
 
-1. Install Ollama.
-2. Sign in to the Ollama account:
+1. Install OpenAI API.
+2. Sign in to the OpenAI API account:
    ```bash
    ollama signin
    ```
@@ -255,9 +266,9 @@ The current application talks to the Ollama API on port `11434`. On the EC2 host
    docker compose up -d --build
    ```
 
-The model weights are not stored on EC2 for `*-cloud` models; inference is performed by Ollama Cloud.
+The model weights are not stored on EC2 for `*-cloud` models; inference is performed by OpenAI API.
 
-For a later fully unattended deployment, replace interactive `ollama signin` with Ollama Cloud API-key authentication and store the key in AWS Secrets Manager or SSM Parameter Store rather than committing it to Git.
+For a later fully unattended deployment, replace interactive `ollama signin` with OpenAI API API-key authentication and store the key in AWS Secrets Manager or SSM Parameter Store rather than committing it to Git.
 
 ### Security-group rule for a demo
 
@@ -278,7 +289,7 @@ While the environment is running, AWS can charge for the EC2 instance, its publi
 
 When finished, `terraform destroy` should delete the EC2 instance, its root EBS volume, security group rules created by the stack, and the ephemeral public IPv4 association. This is preferable to simply stopping the instance when the goal is to avoid ongoing infrastructure charges.
 
-Ollama Cloud usage is separate from AWS billing and follows the Ollama account's included usage/credits.
+OpenAI API usage is separate from AWS billing and follows the OpenAI API account's included usage/credits.
 
 ### Before every demo
 
@@ -362,11 +373,11 @@ red_team_swagger
 public_ip
 ```
 
-The EC2 boot script installs Docker, Docker Compose, Ollama, clones the repository and starts the two Docker services.
+The EC2 boot script installs Docker, Docker Compose, OpenAI API, clones the repository and starts the two Docker services.
 
-### Ollama Cloud sign-in on the AWS host
+### OpenAI API sign-in on the AWS host
 
-The application UIs can start automatically, but Ollama Cloud authentication is account-specific.
+The application UIs can start automatically, but OpenAI API authentication is account-specific.
 
 If you configure an existing EC2 key pair in `terraform.tfvars`:
 
@@ -381,7 +392,7 @@ ollama signin
 ollama run gpt-oss:20b-cloud "Say hello"
 ```
 
-After that the RED TEAM service can use the host Ollama daemon for cloud inference.
+After that the RED TEAM service can use the host OpenAI API daemon for cloud inference.
 
 ### Destroy after the demo
 
@@ -393,3 +404,20 @@ terraform destroy
 The stack is intentionally minimal: one EC2 instance, one temporary public IPv4 association, one root EBS volume, and one security group. The root volume has `delete_on_termination = true`.
 
 Always confirm the destroy completed successfully and that no manually created AWS resources remain.
+
+## OpenAI API key
+
+Copy `.env.example` to `.env` and set:
+
+```env
+OPENAI_API_KEY=sk-...
+```
+
+The key is injected into the `red-team` container at runtime only through `env_file`.
+It is not passed as a Docker build argument and is excluded from Docker build contexts by `.dockerignore`.
+The `.env` file is also excluded from Git by `.gitignore`.
+
+```cmd
+docker compose down
+docker compose up -d --build
+```

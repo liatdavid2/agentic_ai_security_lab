@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.zip
+infra/
+history/

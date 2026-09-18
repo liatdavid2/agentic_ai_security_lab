@@ -1,0 +1,4 @@
+﻿model,latency_ms,status,response_excerpt,error
+gpt-5-mini,1749.3437570083188,fast,OK,
+gpt-4.1-mini,1435.072835010942,fast,OK,
+gpt-4.1-nano,1564.4453809945844,fast,OK,

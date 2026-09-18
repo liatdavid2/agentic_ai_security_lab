@@ -25,18 +25,18 @@ canvas{width:100%;height:145px;display:block}table{width:100%;border-collapse:co
 <body>
 <header>
 <h1>🔴 RED TEAM — SLM Robustness</h1>
-<p>Ollama Cloud + official JailbreakBench.</p>
+<p>OpenAI API + official JailbreakBench.</p>
 </header>
 <main>
 <div class="grid">
 <section class="card">
 <h2>Benchmark setup</h2>
-<div id="health" class="pill">Checking Ollama…</div>
+<div id="health" class="pill">Checking OpenAI API…</div>
 <div id="dataset" class="muted" style="margin-top:10px"></div>
 
 <label>Models</label>
-<input id="models" value="gpt-oss:20b-cloud,gemma4:31b-cloud">
-<div class="help">Two-model cloud set.</div>
+<input id="models" value="gpt-5-mini,gpt-4.1-mini,gpt-4.1-nano">
+<div class="help">OpenAI cloud models.</div>
 
 <button id="speedBtn" class="secondary" onclick="runSpeedTest()">1. Speed test before benchmark</button>
 <div id="speedArea" style="display:none">
@@ -107,8 +107,8 @@ let speedTestDone=false;
 async function init(){
  const h=await (await fetch('/api/health')).json();
  const he=document.getElementById('health');
- he.textContent=h.ollama?'Ollama connected':'Ollama not connected';
- he.className='pill '+(h.ollama?'ok':'bad');
+ he.textContent=h.openai?'OpenAI connected':'OpenAI not connected';
+ he.className='pill '+(h.openai?'ok':'bad');
  const d=await (await fetch('/api/dataset')).json();
  document.getElementById('dataset').innerHTML=d.ready
    ? `Dataset: <b>${d.name}</b> · ${d.rows} rows (${d.harmful} harmful / ${d.benign} benign)`

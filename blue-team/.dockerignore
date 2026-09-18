@@ -1,0 +1,10 @@
+*.env
+.env
+.env.*
+*.pem
+*.key
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.zip
