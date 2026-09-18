@@ -1,2 +1,4 @@
 infra/terraform/agentic-ai-demo.pem
 *.zip
+.env
+*.pem
