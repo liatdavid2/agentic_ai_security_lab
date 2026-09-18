@@ -8,7 +8,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = FastAPI(title="RED TEAM - LLM Security Lab")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_API_KEY_FILE = os.getenv("OPENAI_API_KEY_FILE", "/run/secrets/openai_api_key")
+
+def load_openai_api_key():
+    try:
+        p = Path(OPENAI_API_KEY_FILE)
+        if p.exists():
+            value = p.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+    except Exception:
+        pass
+    # Local-development fallback only. AWS deployment uses the read-only secret file.
+    return os.getenv("OPENAI_API_KEY", "").strip()
+
+OPENAI_API_KEY = load_openai_api_key().strip()
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1").rstrip("/")
 DATA_DIR = Path("/app/data")
 SHARED = Path("/shared/latest_benchmark.json")

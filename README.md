@@ -495,3 +495,27 @@ The BLUE TEAM dashboard compares the security/utility/efficiency trade-off acros
 
 Cost charts use **milli-dollars (m$)** so small benchmark costs remain visually readable.
 `1 m$ = $0.001`.
+
+## OpenAI secret handling
+
+The OpenAI API key is **not baked into the Docker image and is not stored as a container environment variable** in the AWS deployment.
+
+`red-team` reads the key from a read-only file:
+
+```text
+/run/secrets/openai_api_key
+```
+
+Docker Compose mounts the host secret file read-only:
+
+```yaml
+- ${OPENAI_SECRET_FILE:-./secrets/openai_api_key}:/run/secrets/openai_api_key:ro
+```
+
+For local development, create:
+
+```text
+secrets/openai_api_key
+```
+
+and put only the API key in that file. The `secrets/` contents are ignored by Git.

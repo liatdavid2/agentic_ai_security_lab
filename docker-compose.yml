@@ -17,13 +17,15 @@ services:
     ports:
       - "8102:8102"
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      - OPENAI_API_URL=https://api.openai.com/v1
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - MAX_CONCURRENCY=10
+      - JUDGE_MODEL=gpt-4.1
     volumes:
       - benchmark-data:/shared
       - jailbreakbench-data:/app/data
       - ./history:/history
-
-volumes:
+      - ${OPENAI_SECRET_FILE:-./secrets/openai_api_key}:/run/secrets/openai_api_key:ro
   benchmark-data:
   jailbreakbench-data:
