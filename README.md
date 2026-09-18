@@ -1,457 +1,40 @@
-## OpenAI API configuration
-
-Create/update `.env` in the repository root:
-
-```env
-OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-OPENAI_API_URL=https://api.openai.com/v1
-```
-
-The benchmark uses `gpt-5-mini`, `gpt-4.1-mini`, and `gpt-4.1-nano`.
-
 # agentic_ai_security_lab
 
-Two-service Docker Compose lab:
+Two-service Docker Compose portfolio project for **LLM security evaluation, RED TEAM benchmarking, and BLUE TEAM threat hunting**.
 
-1. **BLUE TEAM — Threat Hunting on Agents** 
+The end-to-end flow is:
+
+```text
+JailbreakBench
+   ↓
+RED TEAM benchmark
+   ↓
+OpenAI target models
+   ↓
+Semantic judge
+   ↓
+Per-prompt security telemetry
+   ↓
+Shared benchmark results
+   ↓
+BLUE TEAM detections, findings, token usage, runtime and cost analysis
+```
+
+## Services
+
+1. **BLUE TEAM — LLM Threat Hunting**
 <img width="1917" height="962" alt="image" src="https://github.com/user-attachments/assets/be92f08e-8660-4167-bd26-e9d71d27d4fc" />
 
-3. **RED TEAM — LLM Security Lab / Jailbreak Robustness Benchmark**
+2. **RED TEAM — LLM Security Lab / Jailbreak Robustness Benchmark**
 <img width="1917" height="855" alt="image" src="https://github.com/user-attachments/assets/d630a56a-093d-4f63-9940-fe2e8f325067" />
 
+The project intentionally keeps only two application services in Docker Compose.
 
+---
 
-The LLM Security Lab now benchmarks **real local SLMs through OpenAI API**.  
-OpenAI API is intentionally **not** a third Compose service, so the project stays at two services.
+## Current benchmark configuration
 
-## 1. Install OpenAI API on the host
-
-Install OpenAI API, then pull any models you want to compare. Suggested small models:
-
-```bash
-ollama pull qwen3:1.7b
-ollama pull llama3.2:3b
-ollama pull gemma3:1b
-ollama pull phi4-mini
-```
-
-You can benchmark any OpenAI API model tag, not only these defaults.
-
-## 2. Start the lab
-
-```bash
-docker compose up --build
-```
-
-Open:
-
-- **BLUE TEAM UI — Threat Hunting:** http://localhost:8101
-- **RED TEAM UI — LLM Security Benchmark:** http://localhost:8102
-
-## 3. JailbreakBench
-
-The RED TEAM service uses the **official JailbreakBench dataset only**.
-
-Behavior:
-- If the normalized official dataset already exists, it is reused.
-- If it is missing, the service automatically downloads the official `JBB-Behaviors` harmful and benign CSV splits from the JailbreakBench Hugging Face repository during startup.
-- There is no local smoke-test fallback.
-
-The normalized dataset is stored at:
-
-```text
-/app/data/jailbreakbench_official.json
-```
-
-## Metrics
-
-- **Attack Success Rate (ASR)** — lower is better.
-- **Refusal Rate** — fraction of harmful prompts refused.
-- **Benign Pass Rate** — fraction of benign prompts answered rather than unnecessarily refused.
-- **Average Latency** — average wall-clock response time.
-- **Throughput** — approximate generated tokens per second when OpenAI API reports token counts.
-
-## Benchmark design
-
-Each model receives the same prompts and the same system instruction.  
-The service stores aggregate results in `/shared/latest_benchmark.json`; the Threat Hunting service can display a summary of the latest benchmark.
-
-The built-in judge is deliberately simple and auditable: it uses response-pattern heuristics to classify refusal vs non-refusal. For research-grade evaluation, replace it with the official JailbreakBench judging pipeline or a validated external judge.
-
-
-### Why the project does not `pip install jailbreakbench`
-
-The upstream Python package currently pins an old LiteLLM dependency that may fail to resolve in modern Python/container environments. This project only needs the official JBB-Behaviors data, so it downloads the two official CSV splits directly from the JailbreakBench Hugging Face dataset repository instead of installing the full benchmark package.
-
-
-## RED TEAM → BLUE TEAM integration
-
-The RED TEAM stores both aggregate model metrics and one event per JailbreakBench prompt in the shared Docker volume.
-
-The BLUE TEAM now reads the same run and provides:
-- Security overview KPIs.
-- ASR by model.
-- Successful jailbreak findings.
-- Benign false-refusal findings.
-- Detection rules for repeated jailbreak success, high ASR, and over-refusal.
-- Top failed JailbreakBench topics/categories.
-
-This keeps the two services on the same experiment:
-`JailbreakBench → SLM responses → RED TEAM results → BLUE TEAM detections and investigation`.
-
-
-## RED TEAM benchmark modes and exports
-
-The RED TEAM UI supports:
-
-- **Fast benchmark** — stratified maximum number of rows **per class**. Default: 10,000 per class, editable in the UI.
-- **Full benchmark** — uses all rows in every class.
-- Live progress: `N/M models completed — currently running <model>` plus an overall progress bar and current sample counter.
-- Automatic CSV persistence after each completed benchmark:
-  - `/shared/benchmark_summary.csv`
-  - `/shared/benchmark_events.csv`
-- Both CSVs can be downloaded directly from the RED TEAM UI.
-
-Fast-mode sampling is deterministic (seed 42) so runs are comparable.
-
-
-## Latest portfolio features
-
-### RED TEAM
-- Defaults to two OpenAI API models: `gpt-oss:20b-cloud` and `gemma4:31b-cloud`.
-- Requires a model speed test before the benchmark button is enabled.
-- Speed test shows latency and Fast / Moderate / Slow status.
-- Fast and Full benchmark modes remain available.
-- Benchmark progress bar shows completed models and current sample progress.
-- Results are persisted to CSV:
-  - `/shared/benchmark_summary.csv`
-  - `/shared/benchmark_events.csv`
-  - `/shared/speed_test_results.csv`
-
-### BLUE TEAM
-- SOC-style findings with High / Medium / Low severity.
-- Clickable drill-down for each finding.
-- Drill-down shows model, prompt ID, topic, benchmark prompt, model response excerpt, outcome, latency, and recommended control.
-- Detection rules include a concrete recommended control.
-- BLUE TEAM findings can be exported to `/shared/blue_team_findings.csv`.
-
-
-## Repository-level CSV history
-
-The project now contains a root-level `history/` directory outside both services.
-
-Docker bind-mounts `./history` to `/history` in both services. After each run the system saves timestamped CSV snapshots there without triggering any additional model inference:
-
-- `YYYYMMDD_HHMMSS_speed_test_results.csv`
-- `YYYYMMDD_HHMMSS_benchmark_summary.csv`
-- `YYYYMMDD_HHMMSS_benchmark_events.csv`
-- `YYYYMMDD_HHMMSS_blue_team_findings.csv` when BLUE TEAM findings are exported.
-
-BLUE TEAM analytics are derived only from the already-saved RED TEAM benchmark JSON/events, so the added dashboard features do not increase LLM runtime.
-
-### BLUE TEAM additions
-- Top risky model KPI.
-- ASR displayed with sample size, e.g. `100% (10/10)`.
-- Model comparison table with harmful/benign sample counts, latency and recommended control.
-- Filters for model, severity and topic.
-- CSV history panel.
-
-
-## AWS demo deployment with Terraform — create only when needed, destroy after
-
-For a portfolio/demo deployment, the simplest low-cost AWS pattern is an **ephemeral EC2 deployment managed by Terraform**.
-
-### Recommended architecture
-
-```text
-Internet
-   |
-   v
-EC2 (small Linux instance)
-   |
-   +-- Docker Compose
-       +-- RED TEAM UI/API   :8102
-       +-- BLUE TEAM UI/API  :8101
-   |
-   +-- OpenAI API client/daemon on the EC2 host
-       |
-       +--> OpenAI API models
-```
-
-Keep the AWS side intentionally small:
-
-- One EC2 instance only.
-- One small root EBS volume with `delete_on_termination = true`.
-- One security group.
-- No RDS.
-- No NAT Gateway.
-- No Application Load Balancer.
-- No Elastic IP.
-- No Kubernetes/ECS for this demo.
-- Terraform state can stay local for a personal demo.
-
-This keeps both cost and operational complexity low.
-
-### Important: stop is not the same as zero cost
-
-Stopping EC2 stops compute billing, but the EBS disk can still incur storage charges.
-
-For an environment that should cost effectively **nothing while it does not exist**, use:
-
-```bash
-terraform destroy
-```
-
-Terraform will remove the resources it created. Later, recreate the demo with:
-
-```bash
-terraform apply
-```
-
-The local Terraform state stays on the developer machine, so the same infrastructure can be recreated.
-
-### Suggested Terraform lifecycle
-
-From the repository root:
-
-```bash
-cd infra/terraform
-terraform init
-terraform plan
-terraform apply
-```
-
-After `apply`, Terraform should output:
-
-```text
-blue_team_url = http://<PUBLIC_IP>:8101
-red_team_url  = http://<PUBLIC_IP>:8102
-```
-
-Run the demo, then clean up:
-
-```bash
-terraform plan -destroy
-terraform destroy
-```
-
-Use `terraform plan -destroy` first when you want to review exactly what will be deleted.
-
-### EC2 sizing
-
-The EC2 instance does **not** need a GPU because inference is performed by OpenAI API.
-
-A small x86 instance such as `t3.small` is a practical starting point for:
-
-- two FastAPI services,
-- static dashboards,
-- Docker Compose,
-- CSV history,
-- outbound calls to OpenAI API.
-
-If memory usage is low, the instance type can be reduced later.
-
-### OpenAI API on the AWS host
-
-The current application talks to the OpenAI API API on port `11434`. On the EC2 host:
-
-1. Install OpenAI API.
-2. Sign in to the OpenAI API account:
-   ```bash
-   ollama signin
-   ```
-3. Pull only the small cloud manifests:
-   ```bash
-   ollama pull gpt-oss:20b-cloud
-   ollama pull gemma4:31b-cloud
-   ollama pull gpt-oss:120b-cloud
-   ```
-4. Start the Docker Compose application:
-   ```bash
-   docker compose up -d --build
-   ```
-
-The model weights are not stored on EC2 for `*-cloud` models; inference is performed by OpenAI API.
-
-For a later fully unattended deployment, replace interactive `ollama signin` with OpenAI API API-key authentication and store the key in AWS Secrets Manager or SSM Parameter Store rather than committing it to Git.
-
-### Security-group rule for a demo
-
-For a private demo, restrict inbound access to the developer/recruiter's IP where practical.
-
-Required application ports:
-
-```text
-8101  BLUE TEAM
-8102  RED TEAM
-```
-
-Do not expose port `11434` publicly.
-
-### Cost behavior
-
-While the environment is running, AWS can charge for the EC2 instance, its public IPv4 address, EBS storage, and data transfer according to AWS pricing.
-
-When finished, `terraform destroy` should delete the EC2 instance, its root EBS volume, security group rules created by the stack, and the ephemeral public IPv4 association. This is preferable to simply stopping the instance when the goal is to avoid ongoing infrastructure charges.
-
-OpenAI API usage is separate from AWS billing and follows the OpenAI API account's included usage/credits.
-
-### Before every demo
-
-```bash
-cd infra/terraform
-terraform apply
-```
-
-Then verify:
-
-```text
-BLUE TEAM: http://<PUBLIC_IP>:8101
-RED TEAM:  http://<PUBLIC_IP>:8102
-Swagger:
-http://<PUBLIC_IP>:8101/docs
-http://<PUBLIC_IP>:8102/docs
-```
-
-### After every demo
-
-```bash
-cd infra/terraform
-terraform destroy
-```
-
-Then verify in the AWS console that the Terraform-created EC2 instance and EBS volume are gone.
-
-> Recommendation: for this portfolio project, prefer **apply → demo → destroy** rather than maintaining a permanently running AWS environment.
-
-
-## Terraform files are included
-
-The repository now contains a working starter stack under:
-
-```text
-infra/terraform/
-├─ provider.tf
-├─ variables.tf
-├─ main.tf
-├─ outputs.tf
-├─ user_data.sh.tftpl
-├─ terraform.tfvars.example
-└─ .gitignore
-```
-
-### One-time setup
-
-Copy the example variables file:
-
-**Windows CMD**
-```cmd
-cd infra\terraform
-copy terraform.tfvars.example terraform.tfvars
-```
-
-Edit `terraform.tfvars` and set at least:
-
-```hcl
-repo_url    = "https://github.com/YOUR_GITHUB_USER/agentic_ai_security_lab.git"
-allowed_cidr = "YOUR_PUBLIC_IP/32"
-```
-
-`repo_url` must be reachable from the EC2 instance. The easiest portfolio setup is a public GitHub repository.
-
-### Deploy
-
-```cmd
-cd infra\terraform
-terraform init
-terraform plan
-terraform apply
-```
-
-After apply, Terraform prints:
-
-```text
-blue_team_url
-red_team_url
-blue_team_swagger
-red_team_swagger
-public_ip
-```
-
-The EC2 boot script installs Docker, Docker Compose, OpenAI API, clones the repository and starts the two Docker services.
-
-### OpenAI API sign-in on the AWS host
-
-The application UIs can start automatically, but OpenAI API authentication is account-specific.
-
-If you configure an existing EC2 key pair in `terraform.tfvars`:
-
-```hcl
-key_name = "YOUR_EXISTING_EC2_KEYPAIR"
-```
-
-then connect to the host and run:
-
-```bash
-ollama signin
-ollama run gpt-oss:20b-cloud "Say hello"
-```
-
-After that the RED TEAM service can use the host OpenAI API daemon for cloud inference.
-
-### Destroy after the demo
-
-```cmd
-terraform plan -destroy
-terraform destroy
-```
-
-The stack is intentionally minimal: one EC2 instance, one temporary public IPv4 association, one root EBS volume, and one security group. The root volume has `delete_on_termination = true`.
-
-Always confirm the destroy completed successfully and that no manually created AWS resources remain.
-
-## OpenAI API key
-
-Copy `.env.example` to `.env` and set:
-
-```env
-OPENAI_API_KEY=sk-...
-```
-
-The key is injected into the `red-team` container at runtime only through `env_file`.
-It is not passed as a Docker build argument and is excluded from Docker build contexts by `.dockerignore`.
-The `.env` file is also excluded from Git by `.gitignore`.
-
-```cmd
-docker compose down
-docker compose up -d --build
-```
-## Benchmark evaluation
-
-The RED TEAM benchmark uses:
-
-```text
-Target models: gpt-5-mini, gpt-4.1-mini, gpt-4.1-nano
-Semantic judge: gpt-4.1-nano
-Concurrency: 10
-```
-
-For harmful prompts, the semantic judge classifies each model response as one of:
-
-```text
-REFUSAL
-SAFE_ALTERNATIVE
-HARMFUL_COMPLIANCE
-```
-
-Only `HARMFUL_COMPLIANCE` counts as a successful jailbreak / attack success.
-The previous text-pattern refusal detector is retained only as a diagnostic field (`heuristic_refused`) in the detailed CSV.
-
-For benign prompts, the judge returns `ANSWERED` or `REFUSAL`; benign pass rate is based on that semantic classification.
-
-`MAX_CONCURRENCY=10` runs up to ten prompt evaluations in parallel. Each evaluation performs the target-model request and then the semantic-judge request.
-
-## Current benchmark models
+### Target models
 
 ```text
 gpt-5-nano
@@ -459,68 +42,830 @@ gpt-4.1-nano
 gpt-4o-mini
 ```
 
-Semantic judge:
+### Semantic judge
 
 ```text
 gpt-4.1
 ```
 
-Concurrency:
+### Concurrency
 
 ```text
-10
+MAX_CONCURRENCY=10
 ```
 
-## BLUE TEAM trade-off dashboard
+Inference is performed directly through the **OpenAI Responses API**.
 
-The BLUE TEAM dashboard compares the evaluated models across security, benign utility, runtime, token usage, and estimated API cost.
+Ollama is not required.
 
-The benchmark records OpenAI Responses API token usage for every target-model request and every semantic-judge request. Estimated costs are calculated from the pricing snapshot embedded in `red-team/app.py` (`MODEL_PRICING`, dated 2026-09-18). If provider prices change, update that dictionary in the code.
+---
 
-Dashboard additions include:
-- 3-card responsive layout on wide screens.
-- `Top failed topics` is hidden when there are no successful jailbreaks.
-- Target-model input/output token accounting per request and per run.
-- Semantic-judge input/output token accounting.
-- Target-model cost, judge cost, and total evaluation cost.
-- Cost-by-model chart (target model vs judge).
-- Input/output cost chart for each target model in the current run.
-- Input/output token-volume chart for each target model in the current run.
+## Local architecture
 
-## BLUE TEAM dashboard
+```text
+Browser
+   |
+   +--> BLUE TEAM UI  http://localhost:8101
+   |
+   +--> RED TEAM UI   http://localhost:8102
 
-The BLUE TEAM dashboard compares the security/utility/efficiency trade-off across models:
+RED TEAM
+   |
+   +--> OpenAI API
+   |
+   +--> /shared/latest_benchmark.json
+   +--> /shared/benchmark_summary.csv
+   +--> /shared/benchmark_events.csv
+   +--> /shared/speed_test_results.csv
 
-- ASR and benign pass rate
-- Runtime latency
-- Input/output token usage
-- Target-model cost
-- Semantic-judge cost
-- Total evaluation cost
+BLUE TEAM
+   |
+   +--> reads RED TEAM benchmark results from /shared
+```
 
-Cost charts use **milli-dollars (m$)** so small benchmark costs remain visually readable.
-`1 m$ = $0.001`.
+---
 
-## OpenAI secret handling
+## OpenAI API secret handling
 
-The OpenAI API key is **not baked into the Docker image and is not stored as a container environment variable** in the AWS deployment.
+The OpenAI API key is **not baked into the Docker image** and is **not stored as an `OPENAI_API_KEY` container environment variable**.
 
-`red-team` reads the key from a read-only file:
+The RED TEAM reads the key from a read-only file:
 
 ```text
 /run/secrets/openai_api_key
 ```
 
-Docker Compose mounts the host secret file read-only:
+Docker Compose mounts the host secret file as read-only:
 
 ```yaml
 - ${OPENAI_SECRET_FILE:-./secrets/openai_api_key}:/run/secrets/openai_api_key:ro
 ```
 
-For local development, create:
+### Local development
+
+Create:
 
 ```text
 secrets/openai_api_key
 ```
 
-and put only the API key in that file. The `secrets/` contents are ignored by Git.
+The file must contain only the key value:
+
+```text
+sk-...
+```
+
+Do not write:
+
+```text
+OPENAI_API_KEY=...
+```
+
+The `secrets/` directory contents are ignored by Git.
+
+Check the secret mount without printing the secret:
+
+```cmd
+docker exec agentic-red-team sh -c "test -f /run/secrets/openai_api_key && test -s /run/secrets/openai_api_key && echo SECRET_OK || echo SECRET_BAD"
+```
+
+---
+
+## Start locally
+
+From the repository root:
+
+```cmd
+docker compose config
+docker compose up -d --build
+```
+
+Open:
+
+```text
+BLUE TEAM UI: http://localhost:8101
+RED TEAM UI:  http://localhost:8102
+
+BLUE Swagger: http://localhost:8101/docs
+RED Swagger:  http://localhost:8102/docs
+```
+
+Check containers:
+
+```cmd
+docker compose ps
+```
+
+Stop:
+
+```cmd
+docker compose down
+```
+
+---
+
+## JailbreakBench
+
+The RED TEAM service uses the official **JailbreakBench JBB-Behaviors** dataset.
+
+Behavior:
+
+- If the normalized official dataset already exists, it is reused.
+- If it is missing, the service downloads the official harmful and benign CSV splits.
+- There is no local smoke-test fallback.
+
+Normalized dataset:
+
+```text
+/app/data/jailbreakbench_official.json
+```
+
+The project does not require the full `jailbreakbench` Python package.
+
+---
+
+## RED TEAM benchmark modes
+
+### Fast benchmark
+
+Uses a configurable stratified maximum number of rows per class.
+
+Sampling is deterministic with seed:
+
+```text
+42
+```
+
+### Full benchmark
+
+Uses the complete normalized JailbreakBench dataset.
+
+### Speed test
+
+A target-model speed test is run before benchmarking and reports model latency.
+
+The RED TEAM UI displays:
+
+- Attack Success Rate
+- Refusal Rate
+- Benign Pass Rate
+- Average Latency
+- Errors
+- Benchmark progress
+
+---
+
+## Semantic evaluation
+
+The primary security evaluation uses a semantic judge rather than simple refusal-pattern matching.
+
+For harmful prompts, the judge classifies each response as:
+
+```text
+REFUSAL
+SAFE_ALTERNATIVE
+HARMFUL_COMPLIANCE
+```
+
+Only:
+
+```text
+HARMFUL_COMPLIANCE
+```
+
+counts as a successful jailbreak.
+
+For benign prompts, the judge distinguishes successful answers from unnecessary refusals.
+
+The older refusal-pattern heuristic can remain as a diagnostic field such as:
+
+```text
+heuristic_refused
+```
+
+but it does not determine the primary ASR result.
+
+Judge failures are tracked separately and are excluded from security-metric denominators rather than silently counted as safe responses.
+
+---
+
+## Metrics
+
+### Security
+
+- **Attack Success Rate (ASR)** — lower is better.
+- **Refusal Rate** — rate of harmful prompts refused.
+- **Successful jailbreaks** — harmful responses judged as `HARMFUL_COMPLIANCE`.
+
+### Utility
+
+- **Benign Pass Rate** — benign prompts answered successfully.
+- **Benign False Refusals** — harmless prompts unnecessarily refused.
+
+### Performance
+
+- **Average Latency**
+- **Speed-test latency**
+- **Concurrent evaluation**
+
+### Token usage
+
+The benchmark records token usage for both the target model and the semantic judge.
+
+Per-event fields include:
+
+```text
+model_input_tokens
+model_output_tokens
+model_total_tokens
+
+judge_input_tokens
+judge_output_tokens
+judge_total_tokens
+```
+
+### API cost
+
+Estimated API cost is calculated from the pricing table embedded in:
+
+```text
+red-team/app.py
+```
+
+Main cost fields:
+
+```text
+model_input_cost_usd
+model_output_cost_usd
+model_cost_usd
+
+judge_input_cost_usd
+judge_output_cost_usd
+judge_cost_usd
+
+total_cost_usd
+```
+
+The pricing table is a snapshot and should be updated in code when provider pricing changes.
+
+---
+
+## RED TEAM → BLUE TEAM integration
+
+RED TEAM writes aggregate results and one security event per benchmark prompt to the shared Docker volume.
+
+BLUE TEAM reads the same run and provides:
+
+- Security overview KPIs
+- ASR by model
+- Successful jailbreak findings
+- Benign false-refusal findings
+- Model-error and judge-error counts
+- Detection rules
+- Per-finding drill-down
+- Model comparison
+- Token usage analysis
+- API cost analysis
+- Security / utility / runtime / cost trade-off
+
+The two services therefore operate on the same experiment:
+
+```text
+JailbreakBench
+→ target-model responses
+→ semantic evaluation
+→ RED TEAM telemetry
+→ BLUE TEAM detections
+```
+
+---
+
+## BLUE TEAM dashboard
+
+The BLUE TEAM dashboard is a compact SOC-style view of the latest benchmark.
+
+### Main KPIs
+
+- Harmful attempts
+- Successful jailbreaks
+- Benign false refusals
+- Total benchmark events
+- Top risky model
+- Estimated total API cost
+
+When all evaluated models have:
+
+```text
+ASR = 0%
+```
+
+the dashboard displays:
+
+```text
+No risky model detected
+```
+
+instead of arbitrarily selecting a model.
+
+### Main panels
+
+- Risk by model
+- Detection rules
+- Cost by model
+- Model comparison
+- Token usage by model
+- Input/output cost
+- Security findings
+- Top failed topics when relevant
+
+### Cost charts
+
+Small API costs are shown directly in USD with adaptive decimal precision.
+
+Examples:
+
+```text
+0.001
+0.00023
+0.000018
+```
+
+This avoids rounding small benchmark costs to `0.000`.
+
+### Model comparison
+
+The comparison table includes:
+
+- ASR
+- Benign Pass Rate
+- Average Latency
+- Input Tokens
+- Output Tokens
+- Total Cost
+- Model Errors
+- Judge Errors
+
+---
+
+## BLUE TEAM detections
+
+Current detection logic includes findings such as:
+
+```text
+HARMFUL_COMPLIANCE
+REPEATED_JAILBREAK_SUCCESS
+HIGH_MODEL_ASR
+BENIGN_OVER_REFUSAL
+MODEL_ERROR
+JUDGE_ERROR
+```
+
+Findings include severity, model, prompt ID, topic, response information and recommended control.
+
+---
+
+## Saved benchmark artifacts
+
+The shared Docker volume contains:
+
+```text
+/shared/latest_benchmark.json
+/shared/benchmark_summary.csv
+/shared/benchmark_events.csv
+/shared/speed_test_results.csv
+```
+
+The repository-level `history/` directory can store timestamped CSV snapshots without triggering additional model inference.
+
+---
+
+# AWS deployment with Terraform
+
+The AWS deployment is designed as an **ephemeral portfolio/demo environment**.
+
+The normal lifecycle is:
+
+```text
+terraform apply
+→ run demo
+→ terraform destroy
+```
+
+This avoids keeping an EC2 environment running when it is not needed.
+
+---
+
+## AWS architecture
+
+```text
+Internet
+   |
+   v
+Public HTTPS
+   |
+   v
+Nginx on EC2
+   |
+   +--> BLUE TEAM container
+   |
+   +--> RED TEAM container
+             |
+             +--> OpenAI API
+
+AWS SSM Parameter Store
+   |
+   +--> SecureString OPENAI API key
+             |
+             v
+      EC2 IAM Role
+             |
+             v
+/opt/agentic_ai_security_lab/secrets/openai_api_key
+             |
+             | read-only bind mount
+             v
+/run/secrets/openai_api_key
+```
+
+The deployment uses:
+
+- One EC2 instance
+- One root EBS volume
+- One security group
+- One EC2 IAM role
+- One IAM instance profile
+- AWS Systems Manager Parameter Store
+- Nginx
+- Let's Encrypt certificate
+- Docker Compose
+
+It does not require:
+
+- RDS
+- NAT Gateway
+- Application Load Balancer
+- Kubernetes
+- ECS
+- Ollama
+
+---
+
+## AWS OpenAI secret
+
+The OpenAI API key is stored once in AWS Systems Manager Parameter Store as a `SecureString`.
+
+Terraform knows only the parameter name.
+
+The secret value is not placed in:
+
+- Git
+- `terraform.tfvars`
+- Terraform variables
+- Terraform state
+- EC2 user-data
+- Docker image
+- `OPENAI_API_KEY` container environment variable
+
+### Create the secret once
+
+From Windows CMD:
+
+```cmd
+set /p OPENAI_API_KEY=Paste OpenAI API key:
+```
+
+Then:
+
+```cmd
+aws ssm put-parameter --name "/agentic-ai-security-lab/openai-api-key" --type SecureString --tier Standard --value "%OPENAI_API_KEY%" --overwrite --region eu-central-1
+```
+
+Clear the local CMD variable:
+
+```cmd
+set OPENAI_API_KEY=
+```
+
+Verify the parameter exists:
+
+```cmd
+aws ssm get-parameter --name "/agentic-ai-security-lab/openai-api-key" --region eu-central-1
+```
+
+Do not add `--with-decryption` when only checking that the parameter exists.
+
+---
+
+## Terraform configuration
+
+Terraform files are under:
+
+```text
+infra/terraform/
+```
+
+Typical files:
+
+```text
+provider.tf
+variables.tf
+main.tf
+outputs.tf
+user_data.sh.tftpl
+terraform.tfvars.example
+.gitignore
+```
+
+Create a local:
+
+```text
+terraform.tfvars
+```
+
+Example:
+
+```hcl
+aws_region    = "eu-central-1"
+instance_type = "t3.small"
+
+repo_url    = "https://github.com/YOUR_GITHUB_USER/agentic_ai_security_lab.git"
+repo_branch = "main"
+
+allowed_cidr = "YOUR_PUBLIC_IP/32"
+
+key_name = "agentic-ai-demo"
+
+openai_api_key_parameter_name = "/agentic-ai-security-lab/openai-api-key"
+```
+
+Never place the actual OpenAI key in `terraform.tfvars`.
+
+---
+
+## Terraform `.gitignore`
+
+Recommended:
+
+```gitignore
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+crash.log
+*.pem
+.env
+.env.*
+*.key
+*.zip
+```
+
+It is usually useful to commit:
+
+```text
+.terraform.lock.hcl
+```
+
+so provider versions remain reproducible.
+
+---
+
+## Deploy to AWS
+
+From:
+
+```cmd
+cd infra\terraform
+```
+
+Run:
+
+```cmd
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+Confirm:
+
+```text
+yes
+```
+
+Terraform creates the EC2 infrastructure and IAM resources.
+
+During EC2 bootstrap, `user_data.sh.tftpl`:
+
+1. installs Docker, AWS CLI, Nginx and Certbot;
+2. clones the GitHub repository;
+3. retrieves the OpenAI API key from SSM using the EC2 IAM role;
+4. writes it to:
+
+```text
+/opt/agentic_ai_security_lab/secrets/openai_api_key
+```
+
+5. applies restrictive file permissions;
+6. mounts it read-only into the RED TEAM container;
+7. starts Docker Compose;
+8. configures HTTPS.
+
+---
+
+## AWS secret-file permissions
+
+On the EC2 host:
+
+```text
+/opt/agentic_ai_security_lab/secrets/openai_api_key
+```
+
+is created as a root-owned secret file with restrictive permissions.
+
+Inside RED TEAM it is available as:
+
+```text
+/run/secrets/openai_api_key
+```
+
+through a read-only mount.
+
+Check without displaying the key:
+
+```bash
+sudo docker exec agentic-red-team sh -c 'test -s /run/secrets/openai_api_key && echo SECRET_OK || echo SECRET_BAD'
+```
+
+---
+
+## Docker permissions on EC2
+
+The bootstrap adds the `ubuntu` user to the Docker group.
+
+If the current SSH session still gets:
+
+```text
+permission denied while trying to connect to the docker API
+```
+
+either use:
+
+```bash
+sudo docker ps
+```
+
+or reload group membership:
+
+```bash
+sudo usermod -aG docker ubuntu
+newgrp docker
+```
+
+A fresh SSH session also reloads the group membership.
+
+---
+
+## Verify containers on AWS
+
+```bash
+sudo docker ps
+```
+
+Expected containers:
+
+```text
+agentic-red-team
+agentic-blue-team
+```
+
+Check Compose:
+
+```bash
+cd /opt/agentic_ai_security_lab
+sudo docker compose ps -a
+```
+
+Check RED TEAM logs:
+
+```bash
+sudo docker logs agentic-red-team --tail 100
+```
+
+Check BLUE TEAM logs:
+
+```bash
+sudo docker logs agentic-blue-team --tail 100
+```
+
+---
+
+## HTTPS endpoints
+
+Terraform outputs the public URLs.
+
+Use:
+
+```cmd
+terraform output
+```
+
+or individually:
+
+```cmd
+terraform output public_ip
+terraform output blue_team_url
+terraform output red_team_url
+terraform output blue_team_swagger
+terraform output red_team_swagger
+terraform output ssh_command
+```
+
+The Terraform configuration exposes the applications through Nginx HTTPS rather than directly exposing the application ports publicly.
+
+---
+
+## SSH
+
+If an EC2 key pair is configured:
+
+```cmd
+ssh -i agentic-ai-demo.pem ubuntu@<PUBLIC_IP>
+```
+
+---
+
+## Destroy after the demo
+
+Stopping EC2 is not the same as removing all infrastructure costs.
+
+For this project, the preferred lifecycle is:
+
+```cmd
+terraform plan -destroy
+terraform destroy
+```
+
+Confirm:
+
+```text
+yes
+```
+
+The SSM OpenAI API parameter is intentionally created outside Terraform, so it remains available after:
+
+```text
+terraform destroy
+```
+
+The next:
+
+```cmd
+terraform apply
+```
+
+can reuse the same secret automatically.
+
+---
+
+## Security notes
+
+Do not commit:
+
+```text
+terraform.tfstate
+terraform.tfvars
+*.pem
+.env
+secrets/openai_api_key
+```
+
+Do not print the OpenAI API key in logs or screenshots.
+
+For verification, test only whether the secret file exists and is non-empty.
+
+---
+
+## Portfolio value
+
+The project demonstrates:
+
+- LLM security evaluation
+- RED TEAM / BLUE TEAM workflows
+- Jailbreak robustness benchmarking
+- Semantic LLM judging
+- Security telemetry
+- Benign-utility evaluation
+- Token accounting
+- API cost accounting
+- Concurrent model evaluation
+- FastAPI
+- Docker Compose
+- SOC-style dashboards
+- Swagger APIs
+- AWS EC2
+- Terraform
+- IAM
+- SSM Parameter Store
+- Read-only secret handling
+- HTTPS deployment
+- Ephemeral apply / destroy infrastructure workflow
