@@ -50,7 +50,7 @@ canvas{width:100%;height:135px;display:block}.rule{display:flex;justify-content:
     <h2>Detection rules</h2><div id="detections" class="muted">No data yet.</div>
   </section>
   <section class="card">
-    <h2>Cost by model</h2><p class="muted">Target-model + semantic-judge cost in USD.</p>
+    <h2>Cost by model</h2><p class="muted">Target-model + semantic-judge cost in USD (adaptive precision).</p>
     <canvas id="costChart"></canvas>
   </section>
 </div>
@@ -68,7 +68,7 @@ canvas{width:100%;height:135px;display:block}.rule{display:flex;justify-content:
     <canvas id="tokenChart"></canvas>
   </section>
   <section class="card">
-    <h2>Input / output cost</h2><p class="muted">Target-model input vs output cost in USD.</p>
+    <h2>Input / output cost</h2><p class="muted">Target-model input vs output cost in USD (adaptive precision).</p>
     <canvas id="priceChart"></canvas>
   </section>
 </div>
@@ -103,6 +103,14 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function money(v){const n=Number(v||0);return n<0.01?'$'+n.toFixed(5):'$'+n.toFixed(3)}
 function milliDollar(v){return (Number(v||0)*1000).toFixed(3)+' m$'}
 function shortNum(v){const n=Number(v||0);return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n))}
+function smallUsd(v){
+ const n=Number(v||0);
+ if(n===0)return '0';
+ if(Math.abs(n)>=0.01)return n.toFixed(3);
+ if(Math.abs(n)>=0.001)return n.toFixed(4);
+ if(Math.abs(n)>=0.0001)return n.toFixed(5);
+ return n.toFixed(6);
+}
 
 function prepCanvas(canvasId){const c=document.getElementById(canvasId);if(!c)return null;const dpr=window.devicePixelRatio||1,w=c.clientWidth||400,h=c.clientHeight||135;c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);return {c,ctx,w,h}}
 function drawBar(canvasId,rows,labelKey,valueKey,suffix='',maxOverride=null,decimals=1){const x=prepCanvas(canvasId);if(!x)return;const {ctx,w,h}=x,pad={l:45,r:10,t:14,b:40},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;const vals=rows.map(r=>Number(r[valueKey]||0)),max=maxOverride||Math.max(1,...vals)*1.15;ctx.strokeStyle='#344965';ctx.fillStyle='#9fb1c9';ctx.font='10px system-ui';for(let i=0;i<=3;i++){const y=pad.t+ch-(i/3)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/3)*max).toFixed(decimals===0?0:1)+suffix,2,y+3)}const slot=cw/Math.max(1,rows.length),bw=Math.min(55,slot*.5);rows.forEach((r,i)=>{const v=Number(r[valueKey]||0),bh=(v/max)*ch,x0=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;ctx.fillStyle='#63a9ff';ctx.fillRect(x0,y,bw,bh);ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(decimals)+suffix,x0+bw/2,Math.max(10,y-4));ctx.save();ctx.translate(x0+bw/2,pad.t+ch+12);ctx.rotate(-.28);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,18),0,0);ctx.restore();ctx.textAlign='left'})}
@@ -150,9 +158,9 @@ async function loadAll(){const o=await (await fetch('/api/overview')).json();if(
  drawBar('asrChart',o.models,'model','asr','%',100,1);
  const costRows=o.models.map(m=>({...m,model_cost_display:Number(m.model_cost_usd||0),judge_cost_display:Number(m.judge_cost_usd||0)}));
  const ioCostRows=o.models.map(m=>({...m,input_cost_display:Number(m.model_input_cost_usd||0),output_cost_display:Number(m.model_output_cost_usd||0)}));
- drawGrouped('costChart',costRows,'model','model_cost_display','judge_cost_display','Model','Judge',v=>Number(v).toFixed(3),0.0001);
+ drawGrouped('costChart',costRows,'model','model_cost_display','judge_cost_display','Model','Judge',smallUsd,0.000001);
  drawGrouped('tokenChart',o.models,'model','model_input_tokens','model_output_tokens','Input','Output',shortNum,1);
- drawGrouped('priceChart',ioCostRows,'model','input_cost_display','output_cost_display','Input','Output',v=>Number(v).toFixed(3),0.0001);
+ drawGrouped('priceChart',ioCostRows,'model','input_cost_display','output_cost_display','Input','Output',smallUsd,0.000001);
  renderModelTable(o.models);
  const topics=o.top_failed_topics||[];const topicsCard=document.getElementById('topicsCard');const findingsCard=document.getElementById('findingsCard');if(topics.length){topicsCard.style.display='block';findingsCard.style.gridColumn='span 2';drawBar('topicChart',topics,'name','count','',null,0)}else{topicsCard.style.display='none';findingsCard.style.gridColumn='1 / -1'}
  const d=await (await fetch('/api/detections')).json();document.getElementById('detections').innerHTML=d.detections.map(x=>`<div class="rule"><div><b>${esc(x.rule)}</b><div class="muted">${esc(x.description)}</div><div class="muted">Control: ${esc(x.control)}</div></div><div><span class="pill ${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</span> ${x.matches}</div></div>`).join('');
