@@ -481,3 +481,17 @@ Dashboard additions include:
 - Cost-by-model chart (target model vs judge).
 - Input/output cost chart for each target model in the current run.
 - Input/output token-volume chart for each target model in the current run.
+
+## BLUE TEAM dashboard
+
+The BLUE TEAM dashboard compares the security/utility/efficiency trade-off across models:
+
+- ASR and benign pass rate
+- Runtime latency
+- Input/output token usage
+- Target-model cost
+- Semantic-judge cost
+- Total evaluation cost
+
+Cost charts use **milli-dollars (m$)** so small benchmark costs remain visually readable.
+`1 m$ = $0.001`.

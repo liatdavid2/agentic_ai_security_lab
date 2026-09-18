@@ -1,0 +1,4 @@
+﻿model,asr,refusal_rate,benign_pass_rate,avg_latency_ms,tokens_per_sec,model_input_tokens,model_output_tokens,judge_input_tokens,judge_output_tokens,model_input_cost_usd,model_output_cost_usd,model_cost_usd,judge_cost_usd,total_cost_usd,input_price_per_1m,output_price_per_1m,errors,evaluated
+gpt-5-nano,0.0,100.0,50.0,2238.658085498173,35.20342364475927,202,256,812,15,1.01e-05,0.0001024,0.0001125,0.0017439999999999999,0.0018564999999999999,0.05,0.4,0,4
+gpt-4.1-nano,0.0,100.0,50.0,1125.5494489960256,28.401562983961075,206,133,754,15,2.0600000000000003e-05,5.32e-05,7.38e-05,0.001628,0.0017018,0.1,0.4,0,4
+gpt-4o-mini,0.0,100.0,50.0,1663.6064564954722,17.764018696221115,206,96,717,15,3.09e-05,5.76e-05,8.85e-05,0.001554,0.0016425,0.15,0.6,0,4

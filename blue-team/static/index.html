@@ -50,7 +50,7 @@ canvas{width:100%;height:135px;display:block}.rule{display:flex;justify-content:
     <h2>Detection rules</h2><div id="detections" class="muted">No data yet.</div>
   </section>
   <section class="card">
-    <h2>Cost by model</h2><p class="muted">Target-model cost + semantic-judge cost for this run.</p>
+    <h2>Cost by model</h2><p class="muted">Target-model + semantic-judge cost in milli-dollars (m$).</p>
     <canvas id="costChart"></canvas>
   </section>
 </div>
@@ -59,7 +59,7 @@ canvas{width:100%;height:135px;display:block}.rule{display:flex;justify-content:
   <section class="card">
     <h2>Model comparison</h2>
     <div class="tableWrap"><table>
-      <thead><tr><th>Model</th><th>ASR</th><th>Benign</th><th>Latency</th><th>Tokens</th><th>Total cost</th><th>Errors</th></tr></thead>
+      <thead><tr><th>Model</th><th>ASR</th><th>Benign</th><th>Latency</th><th>Input tok.</th><th>Output tok.</th><th>Total cost</th><th>Errors</th></tr></thead>
       <tbody id="modelTable"></tbody>
     </table></div>
   </section>
@@ -68,7 +68,7 @@ canvas{width:100%;height:135px;display:block}.rule{display:flex;justify-content:
     <canvas id="tokenChart"></canvas>
   </section>
   <section class="card">
-    <h2>Input / output cost</h2><p class="muted">Estimated target-model input vs output cost for this run.</p>
+    <h2>Input / output cost</h2><p class="muted">Target-model input vs output cost in milli-dollars (m$).</p>
     <canvas id="priceChart"></canvas>
   </section>
 </div>
@@ -101,13 +101,14 @@ canvas{width:100%;height:135px;display:block}.rule{display:flex;justify-content:
 let overviewData=null, allFindings=[];
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function money(v){const n=Number(v||0);return n<0.01?'$'+n.toFixed(5):'$'+n.toFixed(3)}
+function milliDollar(v){return (Number(v||0)*1000).toFixed(3)+' m$'}
 function shortNum(v){const n=Number(v||0);return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n))}
 
 function prepCanvas(canvasId){const c=document.getElementById(canvasId);if(!c)return null;const dpr=window.devicePixelRatio||1,w=c.clientWidth||400,h=c.clientHeight||135;c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);return {c,ctx,w,h}}
 function drawBar(canvasId,rows,labelKey,valueKey,suffix='',maxOverride=null,decimals=1){const x=prepCanvas(canvasId);if(!x)return;const {ctx,w,h}=x,pad={l:45,r:10,t:14,b:40},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;const vals=rows.map(r=>Number(r[valueKey]||0)),max=maxOverride||Math.max(1,...vals)*1.15;ctx.strokeStyle='#344965';ctx.fillStyle='#9fb1c9';ctx.font='10px system-ui';for(let i=0;i<=3;i++){const y=pad.t+ch-(i/3)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(((i/3)*max).toFixed(decimals===0?0:1)+suffix,2,y+3)}const slot=cw/Math.max(1,rows.length),bw=Math.min(55,slot*.5);rows.forEach((r,i)=>{const v=Number(r[valueKey]||0),bh=(v/max)*ch,x0=pad.l+i*slot+(slot-bw)/2,y=pad.t+ch-bh;ctx.fillStyle='#63a9ff';ctx.fillRect(x0,y,bw,bh);ctx.fillStyle='#f4f8fd';ctx.textAlign='center';ctx.fillText(v.toFixed(decimals)+suffix,x0+bw/2,Math.max(10,y-4));ctx.save();ctx.translate(x0+bw/2,pad.t+ch+12);ctx.rotate(-.28);ctx.fillStyle='#a8b8ce';ctx.fillText(String(r[labelKey]).slice(0,18),0,0);ctx.restore();ctx.textAlign='left'})}
 function drawGrouped(canvasId,rows,labelKey,aKey,bKey,aLabel,bLabel,formatter){const x=prepCanvas(canvasId);if(!x)return;const {ctx,w,h}=x,pad={l:48,r:10,t:18,b:42},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;const vals=rows.flatMap(r=>[Number(r[aKey]||0),Number(r[bKey]||0)]),max=Math.max(1,...vals)*1.15;ctx.strokeStyle='#344965';ctx.font='10px system-ui';ctx.fillStyle='#9fb1c9';for(let i=0;i<=3;i++){const y=pad.t+ch-(i/3)*ch;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(formatter((i/3)*max),2,y+3)}const slot=cw/Math.max(1,rows.length),bw=Math.min(26,slot*.27);rows.forEach((r,i)=>{const center=pad.l+i*slot+slot/2;[[aKey,-bw*.6,'#63a9ff'],[bKey,bw*.6,'#b783f5']].forEach(([k,dx,col])=>{const v=Number(r[k]||0),bh=(v/max)*ch,y=pad.t+ch-bh;ctx.fillStyle=col;ctx.fillRect(center+dx-bw/2,y,bw,bh)});ctx.save();ctx.translate(center,pad.t+ch+12);ctx.rotate(-.28);ctx.fillStyle='#a8b8ce';ctx.textAlign='center';ctx.fillText(String(r[labelKey]).slice(0,18),0,0);ctx.restore()});ctx.fillStyle='#63a9ff';ctx.fillRect(pad.l,4,8,8);ctx.fillStyle='#c9d4e5';ctx.fillText(aLabel,pad.l+12,12);ctx.fillStyle='#b783f5';ctx.fillRect(pad.l+80,4,8,8);ctx.fillStyle='#c9d4e5';ctx.fillText(bLabel,pad.l+92,12)}
 
-function renderModelTable(rows){document.getElementById('modelTable').innerHTML=rows.map(m=>`<tr><td>${esc(m.model)}</td><td>${Number(m.asr).toFixed(1)}%</td><td>${Number(m.benign_pass_rate).toFixed(1)}%</td><td>${Number(m.avg_latency_ms).toFixed(0)} ms</td><td>${shortNum(Number(m.model_input_tokens||0)+Number(m.model_output_tokens||0))}</td><td>${money(m.total_cost_usd)}</td><td>${Number(m.model_errors||0)+Number(m.judge_errors||0)} <span class="small">(model ${m.model_errors||0}, judge ${m.judge_errors||0})</span></td></tr>`).join('')}
+function renderModelTable(rows){document.getElementById('modelTable').innerHTML=rows.map(m=>`<tr><td>${esc(m.model)}</td><td>${Number(m.asr).toFixed(1)}%</td><td>${Number(m.benign_pass_rate).toFixed(1)}%</td><td>${Number(m.avg_latency_ms).toFixed(0)} ms</td><td>${shortNum(m.model_input_tokens||0)}</td><td>${shortNum(m.model_output_tokens||0)}</td><td>${money(m.total_cost_usd)}</td><td>${Number(m.model_errors||0)+Number(m.judge_errors||0)} <span class="small">(model ${m.model_errors||0}, judge ${m.judge_errors||0})</span></td></tr>`).join('')}
 function populateFilters(){const models=[...new Set(allFindings.map(x=>x.model).filter(Boolean))].sort(),topics=[...new Set(allFindings.map(x=>x.topic).filter(Boolean))].sort();document.getElementById('modelFilter').innerHTML='<option value="">All models</option>'+models.map(x=>`<option>${esc(x)}</option>`).join('');document.getElementById('topicFilter').innerHTML='<option value="">All topics</option>'+topics.map(x=>`<option>${esc(x)}</option>`).join('')}
 function applyFilters(){const m=document.getElementById('modelFilter').value,s=document.getElementById('severityFilter').value,t=document.getElementById('topicFilter').value;renderFindings(allFindings.filter(x=>(!m||x.model===m)&&(!s||x.severity===s)&&(!t||x.topic===t)))}
 function renderFindings(rows){document.getElementById('findings').innerHTML=rows.slice(0,150).map(x=>`<tr><td class="${x.severity==='high'?'bad':x.severity==='medium'?'warn':'ok'}">${esc(x.severity)}</td><td>${esc(x.model)}</td><td>${esc(x.prompt_id)}</td><td>${esc(x.type)}</td><td>${esc(x.topic||'—')}</td><td><button class="viewBtn" onclick='openFinding(${JSON.stringify(x.model)},${JSON.stringify(String(x.prompt_id))})'>View</button></td></tr>`).join('')}
