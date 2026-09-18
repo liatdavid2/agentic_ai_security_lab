@@ -5,7 +5,7 @@ from pathlib import Path
 from collections import Counter
 import json, csv, time, shutil
 
-app = FastAPI(title="BLUE TEAM - Threat Hunting Dashboard")
+app = FastAPI(title="BLUE TEAM - Threat Hunting on LLM Security Events")
 SHARED = Path("/shared/latest_benchmark.json")
 FINDINGS_CSV = Path("/shared/blue_team_findings.csv")
 HISTORY_DIR = Path("/history")
