@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
@@ -53,7 +55,7 @@ resource "aws_security_group" "demo" {
   }
 
   egress {
-    description = "Outbound internet for package install, Git, Docker, Ollama Cloud and ACME"
+    description = "Outbound internet for package install, Git, Docker, OpenAI API, SSM and ACME"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -66,10 +68,55 @@ resource "aws_security_group" "demo" {
   }
 }
 
+
+resource "aws_iam_role" "demo" {
+  name_prefix = "agentic-ai-security-lab-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name    = "agentic-ai-security-lab-demo"
+    Project = "agentic_ai_security_lab"
+  }
+}
+
+resource "aws_iam_role_policy" "openai_parameter" {
+  name = "read-openai-api-key"
+  role = aws_iam_role.demo.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameter"
+      ]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.openai_api_key_parameter_name}"
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "demo" {
+  name_prefix = "agentic-ai-security-lab-"
+  role        = aws_iam_role.demo.name
+}
+
+
 locals {
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    repo_url    = var.repo_url
-    repo_branch = var.repo_branch
+    repo_url                      = var.repo_url
+    repo_branch                   = var.repo_branch
+    aws_region                    = var.aws_region
+    openai_api_key_parameter_name = var.openai_api_key_parameter_name
   })
 }
 
@@ -79,6 +126,7 @@ resource "aws_instance" "demo" {
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.demo.id]
   key_name                    = var.key_name != "" ? var.key_name : null
+  iam_instance_profile         = aws_iam_instance_profile.demo.name
 
   user_data                   = local.user_data
   user_data_replace_on_change = true

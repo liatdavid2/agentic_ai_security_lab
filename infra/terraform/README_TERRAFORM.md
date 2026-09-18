@@ -12,11 +12,6 @@ Public endpoints after bootstrap:
 
 The application containers continue to use their existing host ports `8101` and `8102`, but those ports are **not publicly opened** by Terraform. Nginx terminates TLS and proxies locally to them.
 
-Ollama remains internal at:
-
-`http://host.docker.internal:11434`
-
-Port `11434` is intentionally NOT opened in the AWS Security Group.
 
 ## Cost model
 
@@ -30,6 +25,77 @@ HTTPS/TLS itself adds **$0 certificate cost**:
 - No ALB required
 
 You still pay the normal AWS costs while the EC2/public IPv4 exist. `terraform destroy` removes the Terraform-managed demo resources.
+
+
+## OpenAI API key — keep it out of Terraform and Git
+
+Create the secret **once**, outside Terraform, in AWS Systems Manager Parameter Store.
+Terraform receives only the parameter name, never the key value.
+
+From Windows CMD:
+
+```cmd
+set /p OPENAI_API_KEY=Paste OpenAI API key: 
+aws ssm put-parameter --name "/agentic-ai-security-lab/openai-api-key" --type SecureString --tier Standard --value "%OPENAI_API_KEY%" --overwrite --region eu-central-1
+set OPENAI_API_KEY=
+```
+
+Verify only the metadata/name (do not request decryption):
+
+```cmd
+aws ssm get-parameter --name "/agentic-ai-security-lab/openai-api-key" --region eu-central-1
+```
+
+In `terraform.tfvars`, store only:
+
+```hcl
+openai_api_key_parameter_name = "/agentic-ai-security-lab/openai-api-key"
+```
+
+Do **not** put `OPENAI_API_KEY=...` in:
+- `terraform.tfvars`
+- Terraform variables
+- `user_data`
+- GitHub
+- Dockerfile / Docker build args
+
+At EC2 boot, the instance IAM role reads the SecureString from SSM and creates:
+
+```text
+/opt/agentic_ai_security_lab/secrets/openai_api_key
+```
+
+with file mode `600` and owner `root:root`.
+
+Docker Compose mounts this file **read-only** into `red-team` as:
+
+```text
+/run/secrets/openai_api_key
+```
+
+The key is not stored in the Docker image and is not exposed as an `OPENAI_API_KEY` container environment variable.
+
+The SSM parameter is created outside Terraform, so `terraform destroy` does not delete it. The next `terraform apply` can reuse the same secret automatically.
+
+
+
+## Verify secret-file mounting
+
+On EC2:
+
+```bash
+sudo ls -l /opt/agentic_ai_security_lab/secrets/openai_api_key
+docker inspect agentic-red-team --format '{{json .Mounts}}'
+```
+
+Inside `red-team`, verify the file exists without printing its contents:
+
+```bash
+docker exec agentic-red-team sh -c 'test -r /run/secrets/openai_api_key && echo "OpenAI secret file mounted read-only"'
+```
+
+Do **not** run `cat` on the secret file in logs or screenshots.
+
 
 ## Deploy / rebuild cleanly
 
@@ -46,7 +112,7 @@ Confirm with:
 yes
 ```
 
-After `apply`, cloud-init installs Docker, Ollama, Nginx and Certbot, starts the Docker services, obtains the public-IP certificate, and enables HTTPS. Certificate issuance happens after EC2 creation, so the HTTPS URLs can take a few minutes to become reachable.
+After `apply`, cloud-init installs Docker, AWS CLI, Nginx and Certbot, reads the OpenAI API key from SSM Parameter Store, starts the Docker services, obtains the public-IP certificate, and enables HTTPS. Certificate issuance happens after EC2 creation, so the HTTPS URLs can take a few minutes to become reachable.
 
 ## Get URLs and SSH command
 
@@ -108,54 +174,6 @@ docker compose ps -a
 docker compose logs --tail=150
 ```
 
-## Sign in to Ollama Cloud
-
-A new EC2 instance does not retain the previous Ollama Cloud login:
-
-```bash
-ollama signin
-```
-
-Test cloud models:
-
-```bash
-ollama run gpt-oss:20b-cloud "Say hello"
-ollama run gemma4:31b-cloud "Say hello"
-ollama run gpt-oss:120b-cloud "Say hello"
-```
-
-## Check Ollama
-
-```bash
-systemctl status ollama --no-pager
-sudo journalctl -u ollama -n 100 --no-pager
-curl http://localhost:11434/api/tags
-ss -ltnp | grep 11434
-```
-
-Expected Ollama listener:
-
-```text
-*:11434
-```
-
-## Test RED TEAM container -> Ollama
-
-```bash
-docker exec -it llm-security-benchmark sh
-```
-
-Inside the container:
-
-```sh
-python -c "import urllib.request; print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags').read().decode())"
-```
-
-Exit:
-
-```sh
-exit
-```
 
 ## Check application logs
 
@@ -163,8 +181,8 @@ exit
 cd /opt/agentic_ai_security_lab
 
 docker compose logs --tail=150
-docker compose logs --tail=150 llm-security-service
-docker compose logs --tail=150 threat-hunting-service
+docker compose logs --tail=150 red-team
+docker compose logs --tail=150 blue-team
 ```
 
 ## Destroy AWS environment

@@ -4,26 +4,18 @@ set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y ca-certificates curl git nginx snapd
+apt-get install -y ca-certificates curl git nginx snapd unzip
+
+# AWS CLI v2 (used only at runtime to read the OpenAI API key from SSM Parameter Store)
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/aws /tmp/awscliv2.zip
 
 # Docker Engine + Compose plugin
 curl -fsSL https://get.docker.com | sh
 usermod -aG docker ubuntu
 
-# Ollama host daemon
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Allow Docker containers to reach Ollama through the EC2 host.
-# Port 11434 is NOT opened in the AWS security group, so it remains internal.
-mkdir -p /etc/systemd/system/ollama.service.d
-cat >/etc/systemd/system/ollama.service.d/override.conf <<'OLLAMAEOF'
-[Service]
-Environment="OLLAMA_HOST=0.0.0.0:11434"
-OLLAMAEOF
-
-systemctl daemon-reload
-systemctl enable ollama
-systemctl restart ollama
 
 # Clone/update repository
 install -d -o ubuntu -g ubuntu /opt/agentic_ai_security_lab
@@ -37,6 +29,25 @@ else
 fi
 
 cd /opt/agentic_ai_security_lab
+
+# Read OPENAI_API_KEY directly from SSM Parameter Store at EC2 runtime.
+# The value is written to a root-owned host secret file and mounted read-only into red-team.
+# It is NOT stored in Terraform variables/state/user_data/Git and is NOT a container environment variable.
+install -d -m 700 -o root -g root /opt/agentic_ai_security_lab/secrets
+
+aws ssm get-parameter \
+  --name '${openai_api_key_parameter_name}' \
+  --with-decryption \
+  --region '${aws_region}' \
+  --query 'Parameter.Value' \
+  --output text \
+  > /opt/agentic_ai_security_lab/secrets/openai_api_key
+
+chown root:root /opt/agentic_ai_security_lab/secrets/openai_api_key
+chmod 600 /opt/agentic_ai_security_lab/secrets/openai_api_key
+
+# Compose expands only the path variable below; the secret VALUE is never placed in env.
+export OPENAI_SECRET_FILE=/opt/agentic_ai_security_lab/secrets/openai_api_key
 
 # Start Docker services on their existing host ports 8101/8102.
 # These ports are not public in the AWS security group; Nginx proxies to them locally.
@@ -129,9 +140,7 @@ systemctl enable --now snap.certbot.renew.timer 2>/dev/null || true
 
 # Basic bootstrap diagnostics
 systemctl is-active --quiet docker
-systemctl is-active --quiet ollama
 systemctl is-active --quiet nginx
-ss -ltn | grep -q ':11434'
 ss -ltn | grep -q ':443'
 ss -ltn | grep -q ':8443'
 
@@ -145,17 +154,14 @@ HTTPS uses a free, publicly trusted Let's Encrypt IP certificate.
 No domain, Route 53, ALB, or paid TLS certificate is required.
 The certificate is short-lived and is created automatically for each fresh EC2 public IP.
 
-IMPORTANT for RED TEAM Ollama Cloud:
-1. Run: ollama signin
-2. Test: ollama run gpt-oss:20b-cloud "Say hello"
-3. The Docker RED TEAM service then uses the host Ollama API.
+RED TEAM uses the OpenAI API.
+OPENAI_API_KEY is fetched at boot from AWS SSM Parameter Store and written to
+/opt/agentic_ai_security_lab/secrets/openai_api_key with mode 600.
+Docker mounts that file read-only at /run/secrets/openai_api_key inside red-team.
 
 Useful logs:
-  sudo journalctl -u ollama -n 100 --no-pager
   sudo journalctl -u nginx -n 100 --no-pager
   sudo tail -n 150 /var/log/cloud-init-output.log
   cd /opt/agentic_ai_security_lab && docker compose logs --tail=150
-
-Do not expose port 11434 publicly.
 
 EOF

@@ -10,3 +10,8 @@ repo_branch = "main"
 
 # Optional. Use an existing EC2 key pair if you want SSH access.
 # key_name = "my-existing-keypair"
+
+
+# Only the SSM parameter NAME is passed to Terraform.
+# Never put the OpenAI secret value in terraform.tfvars.
+openai_api_key_parameter_name = "/agentic-ai-security-lab/openai-api-key"

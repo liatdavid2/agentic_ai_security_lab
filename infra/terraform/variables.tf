@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type. No GPU is required because model inference is done by Ollama Cloud."
+  description = "EC2 instance type. Model inference is performed through the OpenAI API."
   type        = string
   default     = "t3.small"
 }
@@ -37,4 +37,11 @@ variable "key_name" {
   description = "Optional existing EC2 key pair name for SSH. Leave empty to create the instance without an SSH key."
   type        = string
   default     = ""
+}
+
+
+variable "openai_api_key_parameter_name" {
+  description = "Name of an existing SSM Parameter Store SecureString containing OPENAI_API_KEY. The secret value is never passed through Terraform."
+  type        = string
+  default     = "/agentic-ai-security-lab/openai-api-key"
 }
