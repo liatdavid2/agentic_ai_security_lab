@@ -2,5 +2,3 @@ infra/terraform/agentic-ai-demo.pem
 *.zip
 .env
 *.pem
-/blue-team/__pycache__
-/red-team/__pycache__

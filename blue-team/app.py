@@ -30,6 +30,8 @@ def recommended_control(event):
 def event_severity(event):
     if event.get("status") != "ok":
         return "medium"
+    if event.get("judge_status") == "error":
+        return "medium"
     if event.get("category") == "harmful" and event.get("attack_success"):
         return "high"
     if event.get("category") == "benign" and event.get("refused"):
@@ -39,6 +41,8 @@ def event_severity(event):
 def event_type(event):
     if event.get("status") != "ok":
         return "model_error"
+    if event.get("judge_status") == "error":
+        return "judge_error"
     if event.get("category") == "harmful" and event.get("attack_success"):
         return "successful_jailbreak"
     if event.get("category") == "benign" and event.get("refused"):
@@ -85,14 +89,16 @@ def overview():
     if not data:
         return {"available": False}
     events = data.get("events", [])
-    harmful = [e for e in events if e.get("category") == "harmful" and e.get("status") == "ok"]
-    benign = [e for e in events if e.get("category") == "benign" and e.get("status") == "ok"]
+    judged_events = [e for e in events if e.get("status") == "ok" and e.get("judge_status", "ok") == "ok"]
+    harmful = [e for e in judged_events if e.get("category") == "harmful"]
+    benign = [e for e in judged_events if e.get("category") == "benign"]
     successful = [e for e in harmful if e.get("attack_success")]
     benign_false_refusals = [e for e in benign if e.get("refused")]
     per_model = []
     for m in data.get("models", []):
         model_name = m["model"]
-        model_events = [e for e in events if e.get("model") == model_name and e.get("status") == "ok"]
+        model_target_events = [e for e in events if e.get("model") == model_name and e.get("status") == "ok"]
+        model_events = [e for e in model_target_events if e.get("judge_status", "ok") == "ok"]
         model_harmful = [e for e in model_events if e.get("category") == "harmful"]
         model_success = [e for e in model_harmful if e.get("attack_success")]
         model_benign = [e for e in model_events if e.get("category") == "benign"]
@@ -114,20 +120,48 @@ def overview():
             "successful_n": len(model_success),
             "benign_n": len(model_benign),
             "false_refusal_n": len(model_false_refusal),
+            "model_errors": sum(1 for e in events if e.get("model") == model_name and e.get("status") == "model_error"),
+            "judge_errors": sum(1 for e in model_target_events if e.get("judge_status") == "error"),
+            "model_input_tokens": m.get("model_input_tokens", 0),
+            "model_output_tokens": m.get("model_output_tokens", 0),
+            "judge_input_tokens": m.get("judge_input_tokens", 0),
+            "judge_output_tokens": m.get("judge_output_tokens", 0),
+            "model_input_cost_usd": m.get("model_input_cost_usd", 0),
+            "model_output_cost_usd": m.get("model_output_cost_usd", 0),
+            "model_cost_usd": m.get("model_cost_usd", 0),
+            "judge_cost_usd": m.get("judge_cost_usd", 0),
+            "total_cost_usd": m.get("total_cost_usd", 0),
+            "input_price_per_1m": m.get("input_price_per_1m", 0),
+            "output_price_per_1m": m.get("output_price_per_1m", 0),
+            "judge_input_price_per_1m": m.get("judge_input_price_per_1m", 0),
+            "judge_output_price_per_1m": m.get("judge_output_price_per_1m", 0),
             "recommended_control": model_control
         })
-    top_risky = max(per_model, key=lambda x: x.get("asr", 0), default=None)
+    eligible_risk = [x for x in per_model if x.get("harmful_n", 0) > 0]
+    top_risky = max(eligible_risk, key=lambda x: x.get("asr", 0), default=None)
     topic_counts = Counter((e.get("topic") or e.get("behavior") or "uncategorized") for e in successful)
     return {
         "available": True,
         "dataset": data.get("dataset"),
         "total_events": len(events),
+        "model_error_events": sum(1 for e in events if e.get("status") == "model_error"),
+        "judge_error_events": sum(1 for e in events if e.get("status") == "ok" and e.get("judge_status") == "error"),
         "harmful_attempts": len(harmful),
         "successful_jailbreaks": len(successful),
         "benign_false_refusals": len(benign_false_refusals),
         "top_risky_model": top_risky.get("model") if top_risky else None,
         "top_risky_asr": top_risky.get("asr", 0) if top_risky else 0,
         "models": per_model,
+        "pricing": data.get("pricing", {}),
+        "pricing_updated": data.get("pricing_updated", ""),
+        "pricing_note": data.get("pricing_note", ""),
+        "judge_model": data.get("judge_model", ""),
+        "concurrency": data.get("concurrency", 0),
+        "total_model_cost_usd": sum(float(x.get("model_cost_usd") or 0) for x in per_model),
+        "total_judge_cost_usd": sum(float(x.get("judge_cost_usd") or 0) for x in per_model),
+        "total_cost_usd": sum(float(x.get("total_cost_usd") or 0) for x in per_model),
+        "total_model_input_tokens": sum(int(x.get("model_input_tokens") or 0) for x in per_model),
+        "total_model_output_tokens": sum(int(x.get("model_output_tokens") or 0) for x in per_model),
         "top_failed_topics": [{"name": k, "count": v} for k,v in topic_counts.most_common(8)]
     }
 
@@ -162,6 +196,13 @@ def finding_detail(model: str = Query(...), prompt_id: str = Query(...)):
                 "attack_success": e.get("attack_success"),
                 "latency_ms": e.get("latency_ms", 0),
                 "status": e.get("status"),
+                "model_input_tokens": e.get("model_input_tokens", 0),
+                "model_output_tokens": e.get("model_output_tokens", 0),
+                "judge_input_tokens": e.get("judge_input_tokens", 0),
+                "judge_output_tokens": e.get("judge_output_tokens", 0),
+                "model_cost_usd": e.get("model_cost_usd", 0),
+                "judge_cost_usd": e.get("judge_cost_usd", 0),
+                "total_cost_usd": e.get("total_cost_usd", 0),
                 "error": e.get("error") or "",
                 "recommended_control": recommended_control(e)
             }

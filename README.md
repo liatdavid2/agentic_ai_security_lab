@@ -465,3 +465,19 @@ Concurrency:
 ```text
 10
 ```
+
+## BLUE TEAM trade-off dashboard
+
+The BLUE TEAM dashboard compares the evaluated models across security, benign utility, runtime, token usage, and estimated API cost.
+
+The benchmark records OpenAI Responses API token usage for every target-model request and every semantic-judge request. Estimated costs are calculated from the pricing snapshot embedded in `red-team/app.py` (`MODEL_PRICING`, dated 2026-09-18). If provider prices change, update that dictionary in the code.
+
+Dashboard additions include:
+- 3-card responsive layout on wide screens.
+- `Top failed topics` is hidden when there are no successful jailbreaks.
+- Target-model input/output token accounting per request and per run.
+- Semantic-judge input/output token accounting.
+- Target-model cost, judge cost, and total evaluation cost.
+- Cost-by-model chart (target model vs judge).
+- Input/output cost chart for each target model in the current run.
+- Input/output token-volume chart for each target model in the current run.
