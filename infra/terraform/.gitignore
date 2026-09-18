@@ -5,3 +5,8 @@
 terraform.tfvars
 crash.log
 *.pem
+
+.env
+.env.*
+*.key
+*.zip
