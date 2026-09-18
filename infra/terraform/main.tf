@@ -15,20 +15,28 @@ data "aws_ami" "ubuntu" {
 
 resource "aws_security_group" "demo" {
   name_prefix = "agentic-ai-security-lab-"
-  description = "Temporary demo access for BLUE TEAM and RED TEAM"
+  description = "Temporary HTTPS demo access for BLUE TEAM and RED TEAM"
 
   ingress {
-    description = "BLUE TEAM UI/API"
-    from_port   = 8101
-    to_port     = 8101
+    description = "HTTP ACME challenge"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "BLUE TEAM HTTPS"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.allowed_cidr]
   }
 
   ingress {
-    description = "RED TEAM UI/API"
-    from_port   = 8102
-    to_port     = 8102
+    description = "RED TEAM HTTPS"
+    from_port   = 8443
+    to_port     = 8443
     protocol    = "tcp"
     cidr_blocks = [var.allowed_cidr]
   }
@@ -45,7 +53,7 @@ resource "aws_security_group" "demo" {
   }
 
   egress {
-    description = "Outbound internet for package install, Git, Docker and Ollama Cloud"
+    description = "Outbound internet for package install, Git, Docker, Ollama Cloud and ACME"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

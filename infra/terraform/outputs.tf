@@ -4,19 +4,21 @@ output "public_ip" {
 }
 
 output "blue_team_url" {
-  value = "http://${aws_instance.demo.public_ip}:8101"
+  description = "BLUE TEAM HTTPS URL. Certificate bootstrap can take a few minutes after apply."
+  value       = "https://${aws_instance.demo.public_ip}"
 }
 
 output "red_team_url" {
-  value = "http://${aws_instance.demo.public_ip}:8102"
+  description = "RED TEAM HTTPS URL. Certificate bootstrap can take a few minutes after apply."
+  value       = "https://${aws_instance.demo.public_ip}:8443"
 }
 
 output "blue_team_swagger" {
-  value = "http://${aws_instance.demo.public_ip}:8101/docs"
+  value = "https://${aws_instance.demo.public_ip}/docs"
 }
 
 output "red_team_swagger" {
-  value = "http://${aws_instance.demo.public_ip}:8102/docs"
+  value = "https://${aws_instance.demo.public_ip}:8443/docs"
 }
 
 output "ssh_command" {
